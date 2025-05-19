@@ -131,6 +131,9 @@ async function main() {
         `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - Fetching current user details (me)...`
       );
       const me = await scraper.me();
+      console.log(me);
+      const userId = await scraper.getUserIdByScreenName("TwitterDev");
+      console.log(userId);
       if (me) {
         console.log(
           `[SUCCESS] Account ID: ${currentAccount.id} (${currentAccount.username}) - Current user details (me) fetched successfully. User: ${me.username}`
