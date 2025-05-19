@@ -53,7 +53,7 @@ async function main() {
         AND is_burned = FALSE
         AND (cooldown_until IS NULL OR cooldown_until < NOW())
         AND (rest_until IS NULL OR rest_until < NOW())
-      ORDER BY last_used_at ASC NULLS FIRST, id
+      ORDER BY RANDOM()
       LIMIT 1;
     `;
     console.log(
