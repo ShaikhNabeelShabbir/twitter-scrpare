@@ -2,6 +2,7 @@ import { Scraper } from "agent-twitter-client";
 import { Client } from "pg";
 import { getPasswordFromCreds } from "../utils/hash-password";
 import * as dotenv from "dotenv";
+import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
 
@@ -37,6 +38,7 @@ async function main() {
   const dbClient = new Client({ connectionString: DB_CONNECTION_STRING });
   let loggedInScraperInstance: Scraper | null = null;
   let currentAccount: UserAccount | null = null;
+  const scraperId = uuidv4();
 
   try {
     console.log("[INFO] Attempting to connect to database...");
@@ -47,12 +49,14 @@ async function main() {
       "[INFO] Attempting to fetch an eligible account from database..."
     );
     const selectQuery = `
-      SELECT id, email, username
-      FROM ${DB_TABLE_NAME}
-      WHERE is_active = TRUE
-        AND is_burned = FALSE
-        AND (cooldown_until IS NULL OR cooldown_until < NOW())
-        AND (rest_until IS NULL OR rest_until < NOW())
+      SELECT a.id, a.email, a.username
+      FROM ${DB_TABLE_NAME} a
+      LEFT JOIN scraper_mapping m ON a.id = m.account_id AND m.status = 'active'
+      WHERE a.is_active = TRUE
+        AND a.is_burned = FALSE
+        AND (a.cooldown_until IS NULL OR a.cooldown_until < NOW())
+        AND (a.rest_until IS NULL OR a.rest_until < NOW())
+        AND m.account_id IS NULL
       ORDER BY RANDOM()
       LIMIT 1;
     `;
@@ -73,6 +77,18 @@ async function main() {
     currentAccount = dbResult.rows[0] as UserAccount;
     console.log(
       `[INFO] Selected Account - Username: ${currentAccount.username}, ID: ${currentAccount.id} for processing.`
+    );
+
+    // Register mapping in scraper_mapping table
+    await dbClient.query(
+      `INSERT INTO scraper_mapping (scraper_id, account_id, status, started_at, last_heartbeat)
+       VALUES ($1, $2, 'active', NOW(), NOW())
+       ON CONFLICT (scraper_id) DO UPDATE
+       SET account_id = $2, status = 'active', started_at = NOW(), last_heartbeat = NOW();`,
+      [scraperId, currentAccount.id]
+    );
+    console.log(
+      `[INFO] Registered scraper mapping for scraper_id: ${scraperId}, account_id: ${currentAccount.id}`
     );
 
     console.log(
@@ -144,8 +160,10 @@ async function main() {
         );
       }
 
-      console.log(
-        `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - Updating database: last_used_at=NOW(), failure_count=0, current_status='idle', scraper_started_at=NULL.`
+      // On success, set mapping to idle and reset account
+      await dbClient.query(
+        `UPDATE scraper_mapping SET status = 'idle', last_heartbeat = NOW() WHERE scraper_id = $1`,
+        [scraperId]
       );
       await dbClient.query(
         `UPDATE ${DB_TABLE_NAME} 
@@ -163,8 +181,10 @@ async function main() {
       );
 
       if (currentAccount) {
-        console.log(
-          `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - Incrementing failure_count in database.`
+        // On error, set mapping to cooldown
+        await dbClient.query(
+          `UPDATE scraper_mapping SET status = 'cooldown', last_heartbeat = NOW() WHERE scraper_id = $1`,
+          [scraperId]
         );
         const { rows } = await dbClient.query(
           `UPDATE ${DB_TABLE_NAME} 
