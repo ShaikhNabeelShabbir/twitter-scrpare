@@ -32,6 +32,16 @@ if (!DB_PASSWORD) {
 
 const DB_CONNECTION_STRING = `postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 
+// Helper function for exponential cooldown (in minutes)
+function getExponentialCooldown(
+  failureCount: number,
+  baseMinutes = 60,
+  maxMinutes = 10080
+) {
+  const cooldown = baseMinutes * Math.pow(2, failureCount - 1);
+  return Math.min(cooldown, maxMinutes);
+}
+
 async function main() {
   console.log("[INFO] Starting twitter-ca.ts script execution...");
   const scraper = new Scraper();
@@ -167,7 +177,7 @@ async function main() {
       );
       await dbClient.query(
         `UPDATE ${DB_TABLE_NAME} 
-         SET last_used_at = NOW(), failure_count = 0, current_status = 'idle', scraper_started_at = NULL
+         SET last_used_at = NOW(), failure_count = 0, current_status = 'idle', scraper_started_at = NULL, cooldown_until = NULL
          WHERE id = $1`,
         [currentAccount.id]
       );
@@ -186,6 +196,7 @@ async function main() {
           `UPDATE scraper_mapping SET status = 'cooldown', last_heartbeat = NOW() WHERE scraper_id = $1`,
           [scraperId]
         );
+        // Get current failure_count
         const { rows } = await dbClient.query(
           `UPDATE ${DB_TABLE_NAME} 
            SET failure_count = failure_count + 1
@@ -194,8 +205,15 @@ async function main() {
           [currentAccount.id]
         );
         const newFailureCount = rows[0]?.failure_count;
+        const cooldownMinutes = getExponentialCooldown(newFailureCount);
+        await dbClient.query(
+          `UPDATE ${DB_TABLE_NAME}
+           SET cooldown_until = NOW() + INTERVAL '${cooldownMinutes} minutes'
+           WHERE id = $1`,
+          [currentAccount.id]
+        );
         console.log(
-          `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - New failure_count: ${newFailureCount}.`
+          `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - New failure_count: ${newFailureCount}, cooldown set to ${cooldownMinutes} minutes.`
         );
 
         if (newFailureCount >= MAX_FAILURE_COUNT) {
