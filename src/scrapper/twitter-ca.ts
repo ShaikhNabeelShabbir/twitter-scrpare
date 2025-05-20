@@ -3,6 +3,12 @@ import { Client } from "pg";
 import { getPasswordFromCreds } from "../utils/hash-password";
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
+import {
+  createJobState,
+  updateJobState,
+  getIncompleteJob,
+  JobState,
+} from "../utils/job-state-helpers";
 
 dotenv.config();
 
@@ -49,6 +55,9 @@ async function main() {
   let loggedInScraperInstance: Scraper | null = null;
   let currentAccount: UserAccount | null = null;
   const scraperId = uuidv4();
+  let jobState: JobState | null = null;
+  const jobType = "twitter_profile";
+  let resumeCheckpoint: string | null = null;
 
   try {
     console.log("[INFO] Attempting to connect to database...");
@@ -114,6 +123,28 @@ async function main() {
       `[SUCCESS] Account ID: ${currentAccount.id} (${currentAccount.username}) marked as 'active' in database.`
     );
 
+    // Check for incomplete job for this scraper/account/jobType
+    const foundJobState = await getIncompleteJob(
+      scraperId,
+      currentAccount.id,
+      jobType
+    );
+    if (foundJobState && foundJobState.last_checkpoint) {
+      jobState = foundJobState;
+      resumeCheckpoint = jobState.last_checkpoint;
+      console.log(`[INFO] Resuming job from checkpoint: ${resumeCheckpoint}`);
+    } else {
+      // Create new job state
+      jobState = await createJobState({
+        scraper_id: scraperId,
+        account_id: currentAccount.id,
+        job_type: jobType,
+        last_checkpoint: null,
+        status: "running",
+      });
+      console.log(`[INFO] Created new job state: ${jobState.job_id}`);
+    }
+
     try {
       console.log(
         `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - Generating password.`
@@ -170,6 +201,13 @@ async function main() {
         );
       }
 
+      // Example: after fetching profile, update checkpoint
+      await updateJobState(jobState.job_id, {
+        last_checkpoint: "profile_fetched",
+      });
+      // Example: after fetching current user details, update checkpoint
+      await updateJobState(jobState.job_id, { last_checkpoint: "me_fetched" });
+
       // On success, set mapping to idle and reset account
       await dbClient.query(
         `UPDATE scraper_mapping SET status = 'idle', last_heartbeat = NOW() WHERE scraper_id = $1`,
@@ -184,6 +222,9 @@ async function main() {
       console.log(
         `[SUCCESS] Account ID: ${currentAccount.id} (${currentAccount.username}) successfully processed and database updated (status: idle, last_used_at updated, failures reset).`
       );
+
+      // On success, mark job as completed
+      await updateJobState(jobState.job_id, { status: "completed" });
     } catch (processingError) {
       console.error(
         `[ERROR] Error processing Account ID: ${currentAccount?.id} (${currentAccount?.username}):`,
@@ -247,6 +288,16 @@ async function main() {
         console.error(
           "[ERROR] currentAccount was null during error handling. Cannot update database for failure count."
         );
+      }
+
+      if (jobState) {
+        await updateJobState(jobState.job_id, {
+          status: "failed",
+          error_message:
+            processingError instanceof Error
+              ? processingError.message
+              : String(processingError),
+        });
       }
     }
   } catch (error) {
