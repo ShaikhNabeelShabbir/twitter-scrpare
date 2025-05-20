@@ -28,6 +28,10 @@ const MAX_FAILURE_COUNT = parseInt(
   process.env.MAX_FAILURE_COUNT_TWITTER_CA || "3",
   10
 );
+const MAX_ACTIVE_SCRAPERS = parseInt(
+  process.env.MAX_ACTIVE_SCRAPERS || "20",
+  10
+);
 
 if (!DB_PASSWORD) {
   console.error(
@@ -63,6 +67,19 @@ async function main() {
     console.log("[INFO] Attempting to connect to database...");
     await dbClient.connect();
     console.log("[SUCCESS] Successfully connected to the database.");
+
+    // Point 14: Check global cap on active scrapers
+    const { rows: activeRows } = await dbClient.query(
+      `SELECT COUNT(*) AS active_count FROM scraper_mapping WHERE status = 'active';`
+    );
+    const activeCount = parseInt(activeRows[0].active_count, 10);
+    if (activeCount >= MAX_ACTIVE_SCRAPERS) {
+      console.log(
+        `[INFO] Max active scrapers (${MAX_ACTIVE_SCRAPERS}) reached. Exiting.`
+      );
+      await dbClient.end();
+      return;
+    }
 
     console.log(
       "[INFO] Attempting to fetch an eligible account from database..."
