@@ -188,16 +188,16 @@ async function main() {
       );
 
       console.log(
-        `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - Fetching profile for NabeelShaikh03...`
+        `[INFO] Account ID: ${currentAccount.id} (${currentAccount.username}) - Fetching profile for TwitterDev...`
       );
-      const profile = await scraper.getProfile("NabeelShaikh03");
+      const profile = await scraper.getProfile("TwitterDev");
       if (profile) {
         console.log(
-          `[SUCCESS] Account ID: ${currentAccount.id} (${currentAccount.username}) - Profile for NabeelShaikh03 fetched successfully.`
+          `[SUCCESS] Account ID: ${currentAccount.id} (${currentAccount.username}) - Profile for TwitterDev fetched successfully.`
         );
       } else {
         console.warn(
-          `[WARN] Account ID: ${currentAccount.id} (${currentAccount.username}) - Profile for NabeelShaikh03 not found or an error occurred during fetch.`
+          `[WARN] Account ID: ${currentAccount.id} (${currentAccount.username}) - Profile for TwitterDev not found or an error occurred during fetch.`
         );
       }
 
