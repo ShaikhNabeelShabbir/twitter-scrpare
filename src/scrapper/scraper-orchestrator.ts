@@ -7,6 +7,7 @@ import {
   setCooldown,
   resetFailureCount,
   burnAccount,
+  setAccountRestUntil,
   UserAccount,
 } from "./account-manager";
 import {
@@ -132,6 +133,7 @@ export async function runScraperJob(scraper: Scraper, jobType: string) {
     await updateScraperStatus(scraperId, "idle");
     await setAccountStatus(currentAccount.id, "idle");
     await resetFailureCount(currentAccount.id);
+    await setAccountRestUntil(currentAccount.id, 1);
     await updateJobState(jobState.job_id, { status: "completed" });
   } catch (processingError) {
     console.error(

@@ -90,3 +90,13 @@ export async function burnAccount(accountId: string) {
   );
   await client.end();
 }
+
+export async function setAccountRestUntil(accountId: string, days: number) {
+  const client = new Client({ connectionString: DB_CONNECTION_STRING });
+  await client.connect();
+  await client.query(
+    `UPDATE ${DB_TABLE_NAME} SET rest_until = NOW() + INTERVAL '${days} days' WHERE id = $1`,
+    [accountId]
+  );
+  await client.end();
+}
