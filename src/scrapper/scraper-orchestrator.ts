@@ -138,7 +138,8 @@ export async function runScraperJob(scraper: Scraper, jobType: string) {
   } catch (processingError) {
     console.error(
       `[ERROR] Error processing Account ID: ${currentAccount?.id} (${currentAccount?.username}):`,
-      processingError
+      processingError,
+      processingError instanceof Error ? processingError.stack : ""
     );
     await updateScraperStatus(scraperId, "cooldown");
     const newFailureCount = await incrementFailureCount(currentAccount.id);
