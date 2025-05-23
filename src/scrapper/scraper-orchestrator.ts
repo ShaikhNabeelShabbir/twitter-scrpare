@@ -116,6 +116,7 @@ export async function runScraperJob(scraper: Scraper, jobType: string) {
     const profile = await fetchProfile(scraper, "NabeelShaikh03");
     if (profile) {
       console.log(`[SUCCESS] Profile for NabeelShaikh03 fetched successfully.`);
+      console.log(profile);
     }
     await updateJobState(jobState.job_id, {
       last_checkpoint: "profile_fetched",
