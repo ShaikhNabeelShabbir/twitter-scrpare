@@ -29,7 +29,7 @@ export async function getEligibleAccount(): Promise<UserAccount | null> {
       AND (a.cooldown_until IS NULL OR a.cooldown_until < NOW())
       AND (a.rest_until IS NULL OR a.rest_until < NOW())
       AND m.account_id IS NULL
-    ORDER BY RANDOM()
+    ORDER BY a.last_used_at ASC NULLS FIRST
     LIMIT 1;
   `;
   const dbResult = await client.query(selectQuery);
@@ -41,10 +41,17 @@ export async function getEligibleAccount(): Promise<UserAccount | null> {
 export async function setAccountStatus(accountId: string, status: string) {
   const client = new Client({ connectionString: DB_CONNECTION_STRING });
   await client.connect();
-  await client.query(
-    `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW() WHERE id = $2`,
-    [status, accountId]
-  );
+  if (status === "active") {
+    await client.query(
+      `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW(), last_used_at = NOW() WHERE id = $2`,
+      [status, accountId]
+    );
+  } else {
+    await client.query(
+      `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW() WHERE id = $2`,
+      [status, accountId]
+    );
+  }
   await client.end();
 }
 
