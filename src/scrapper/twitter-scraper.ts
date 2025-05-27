@@ -19,7 +19,7 @@ export async function loginToTwitter(
 export async function fetchProfile(scraper: any, screenName: string) {
   console.log(`[INFO] Fetching profile for screenName: ${screenName}`);
   try {
-    const profile = await scraper.getUserByScreenName(screenName);
+    const profile = await scraper.getProfile(screenName);
     if (profile) {
       console.log(`[SUCCESS] Profile fetched for screenName: ${screenName}`);
     } else {
@@ -35,21 +35,21 @@ export async function fetchProfile(scraper: any, screenName: string) {
   }
 }
 
-export async function fetchCurrentUser(scraper: any) {
-  console.log(`[INFO] Fetching current user (me)`);
-  try {
-    const me = await scraper.me();
-    if (me) {
-      console.log(`[SUCCESS] Current user fetched: ${me.username || me.id}`);
-    } else {
-      console.warn(`[WARN] No current user found.`);
-    }
-    return me;
-  } catch (error) {
-    console.error(`[ERROR] Failed to fetch current user`, error);
-    throw error;
-  }
-}
+// export async function fetchCurrentUser(scraper: any) {
+//   console.log(`[INFO] Fetching current user (me)`);
+//   try {
+//     const me = await scraper.me();
+//     if (me) {
+//       console.log(`[SUCCESS] Current user fetched: ${me.username || me.id}`);
+//     } else {
+//       console.warn(`[WARN] No current user found.`);
+//     }
+//     return me;
+//   } catch (error) {
+//     console.error(`[ERROR] Failed to fetch current user`, error);
+//     throw error;
+//   }
+// }
 
 export async function fetchUserIdByScreenName(
   scraper: any,
@@ -57,7 +57,7 @@ export async function fetchUserIdByScreenName(
 ) {
   console.log(`[INFO] Fetching user ID for screenName: ${screenName}`);
   try {
-    const user = await scraper.getUserByScreenName(screenName);
+    const user = await scraper.getProfile(screenName);
     const userId = user?.rest_id || user?.id;
     if (userId) {
       console.log(`[SUCCESS] User ID for screenName ${screenName}: ${userId}`);

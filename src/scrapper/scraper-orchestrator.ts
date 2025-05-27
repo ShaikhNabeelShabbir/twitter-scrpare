@@ -24,7 +24,7 @@ import { getPasswordFromCreds } from "../utils/hash-password";
 import {
   loginToTwitter,
   fetchProfile,
-  fetchCurrentUser,
+  // fetchCurrentUser,
   fetchUserIdByScreenName,
 } from "./twitter-scraper";
 
@@ -121,13 +121,13 @@ export async function runScraperJob(scraper: any, jobType: string) {
       last_checkpoint: "profile_fetched",
     });
     // Fetch current user
-    const me = await fetchCurrentUser(scraper);
+    // const me = await fetchCurrentUser(scraper);
     const userId = await fetchUserIdByScreenName(scraper, "NabeelShaikh03");
-    if (me) {
-      console.log(
-        `[SUCCESS] Current user details (me) fetched successfully. User: ${me.username}`
-      );
-    }
+    // if (me) {
+    //   console.log(
+    //     `[SUCCESS] Current user details (me) fetched successfully. User: ${me.username}`
+    //   );
+    // }
     await updateJobState(jobState.job_id, { last_checkpoint: "me_fetched" });
     // On success, set mapping to idle and reset account
     await updateScraperStatus(scraperId, "idle");
