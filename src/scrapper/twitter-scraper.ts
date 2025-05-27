@@ -1,25 +1,75 @@
-import { Scraper } from "agent-twitter-client";
+import { Scraper } from "@the-convocation/twitter-scraper";
 
 export async function loginToTwitter(
-  scraper: Scraper,
+  scraper: any,
   username: string,
   password: string,
   email: string
 ) {
-  await scraper.login(username, password, email);
+  console.log(`[INFO] Attempting login for username: ${username}`);
+  try {
+    await scraper.login(username, password);
+    console.log(`[SUCCESS] Login successful for username: ${username}`);
+  } catch (error) {
+    console.error(`[ERROR] Login failed for username: ${username}`, error);
+    throw error;
+  }
 }
 
-export async function fetchProfile(scraper: Scraper, screenName: string) {
-  return await scraper.getProfile(screenName);
+export async function fetchProfile(scraper: any, screenName: string) {
+  console.log(`[INFO] Fetching profile for screenName: ${screenName}`);
+  try {
+    const profile = await scraper.getUserByScreenName(screenName);
+    if (profile) {
+      console.log(`[SUCCESS] Profile fetched for screenName: ${screenName}`);
+    } else {
+      console.warn(`[WARN] No profile found for screenName: ${screenName}`);
+    }
+    return profile;
+  } catch (error) {
+    console.error(
+      `[ERROR] Failed to fetch profile for screenName: ${screenName}`,
+      error
+    );
+    throw error;
+  }
 }
 
-export async function fetchCurrentUser(scraper: Scraper) {
-  return await scraper.me();
+export async function fetchCurrentUser(scraper: any) {
+  console.log(`[INFO] Fetching current user (me)`);
+  try {
+    const me = await scraper.me();
+    if (me) {
+      console.log(`[SUCCESS] Current user fetched: ${me.username || me.id}`);
+    } else {
+      console.warn(`[WARN] No current user found.`);
+    }
+    return me;
+  } catch (error) {
+    console.error(`[ERROR] Failed to fetch current user`, error);
+    throw error;
+  }
 }
 
 export async function fetchUserIdByScreenName(
-  scraper: Scraper,
+  scraper: any,
   screenName: string
 ) {
-  return await scraper.getUserIdByScreenName(screenName);
+  console.log(`[INFO] Fetching user ID for screenName: ${screenName}`);
+  try {
+    const user = await scraper.getUserByScreenName(screenName);
+    const userId = user?.rest_id || user?.id;
+    if (userId) {
+      console.log(`[SUCCESS] User ID for screenName ${screenName}: ${userId}`);
+    } else {
+      console.warn(`[WARN] No user ID found for screenName: ${screenName}`);
+    }
+    return userId;
+  } catch (error) {
+    console.error(
+      `[ERROR] Failed to fetch user ID for screenName: ${screenName}`,
+      error
+    );
+    throw error;
+  }
 }

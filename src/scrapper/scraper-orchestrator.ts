@@ -1,4 +1,3 @@
-import { Scraper } from "agent-twitter-client";
 import { v4 as uuidv4 } from "uuid";
 import {
   getEligibleAccount,
@@ -47,7 +46,7 @@ function getExponentialCooldown(
   return Math.min(cooldown, maxMinutes);
 }
 
-export async function runScraperJob(scraper: Scraper, jobType: string) {
+export async function runScraperJob(scraper: any, jobType: string) {
   const scraperId = uuidv4();
   let currentAccount: UserAccount | null = null;
   let jobState: JobState | null = null;
