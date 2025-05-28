@@ -1,4 +1,5 @@
 import { Scraper } from "@the-convocation/twitter-scraper";
+import * as Sentry from "@sentry/node";
 
 export async function loginToTwitter(
   scraper: any,
@@ -11,6 +12,13 @@ export async function loginToTwitter(
     await scraper.login(username, password);
     console.log(`[SUCCESS] Login successful for username: ${username}`);
   } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "loginToTwitter",
+        username: "[MASKED]",
+        email: "[MASKED]",
+      },
+    });
     console.error(`[ERROR] Login failed for username: ${username}`, error);
     throw error;
   }
@@ -27,6 +35,12 @@ export async function fetchProfile(scraper: any, screenName: string) {
     }
     return profile;
   } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "fetchProfile",
+        screenName,
+      },
+    });
     console.error(
       `[ERROR] Failed to fetch profile for screenName: ${screenName}`,
       error
@@ -66,6 +80,12 @@ export async function fetchUserIdByScreenName(
     }
     return userId;
   } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "fetchUserIdByScreenName",
+        screenName,
+      },
+    });
     console.error(
       `[ERROR] Failed to fetch user ID for screenName: ${screenName}`,
       error

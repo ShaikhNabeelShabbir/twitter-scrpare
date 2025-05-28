@@ -1,5 +1,6 @@
 import { Client } from "pg";
 import * as dotenv from "dotenv";
+import * as Sentry from "@sentry/node";
 dotenv.config();
 
 const DB_USER = process.env.DB_USER || "postgres";
@@ -19,40 +20,61 @@ const DB_CONNECTION_STRING = `postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${
 
 export async function getEligibleAccount(): Promise<UserAccount | null> {
   const client = new Client({ connectionString: DB_CONNECTION_STRING });
-  await client.connect();
-  const selectQuery = `
-    SELECT a.id, a.email, a.username
-    FROM ${DB_TABLE_NAME} a
-    LEFT JOIN scraper_mapping m ON a.id = m.account_id AND m.status = 'active'
-    WHERE a.is_active = TRUE
-      AND a.is_burned = FALSE
-      AND (a.cooldown_until IS NULL OR a.cooldown_until < NOW())
-      AND (a.rest_until IS NULL OR a.rest_until < NOW())
-      AND m.account_id IS NULL
-    ORDER BY a.last_used_at ASC NULLS FIRST
-    LIMIT 1;
-  `;
-  const dbResult = await client.query(selectQuery);
-  await client.end();
-  if (dbResult.rows.length === 0) return null;
-  return dbResult.rows[0] as UserAccount;
+  try {
+    await client.connect();
+    const selectQuery = `
+      SELECT a.id, a.email, a.username
+      FROM ${DB_TABLE_NAME} a
+      LEFT JOIN scraper_mapping m ON a.id = m.account_id AND m.status = 'active'
+      WHERE a.is_active = TRUE
+        AND a.is_burned = FALSE
+        AND (a.cooldown_until IS NULL OR a.cooldown_until < NOW())
+        AND (a.rest_until IS NULL OR a.rest_until < NOW())
+        AND m.account_id IS NULL
+      ORDER BY a.last_used_at ASC NULLS FIRST
+      LIMIT 1;
+    `;
+    const dbResult = await client.query(selectQuery);
+    if (dbResult.rows.length === 0) return null;
+    return dbResult.rows[0] as UserAccount;
+  } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "getEligibleAccount",
+      },
+    });
+    throw error;
+  } finally {
+    await client.end();
+  }
 }
 
 export async function setAccountStatus(accountId: string, status: string) {
   const client = new Client({ connectionString: DB_CONNECTION_STRING });
-  await client.connect();
-  if (status === "active") {
-    await client.query(
-      `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW(), last_used_at = NOW() WHERE id = $2`,
-      [status, accountId]
-    );
-  } else {
-    await client.query(
-      `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW() WHERE id = $2`,
-      [status, accountId]
-    );
+  try {
+    await client.connect();
+    if (status === "active") {
+      await client.query(
+        `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW(), last_used_at = NOW() WHERE id = $2`,
+        [status, accountId]
+      );
+    } else {
+      await client.query(
+        `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW() WHERE id = $2`,
+        [status, accountId]
+      );
+    }
+  } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "setAccountStatus",
+        accountId,
+      },
+    });
+    throw error;
+  } finally {
+    await client.end();
   }
-  await client.end();
 }
 
 export async function incrementFailureCount(

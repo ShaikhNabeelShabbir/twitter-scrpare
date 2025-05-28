@@ -1,5 +1,24 @@
 import { runScraperJob } from "./scraper-orchestrator";
 import { createScraperWithProxy } from "../utils/proxy-config";
+import * as Sentry from "@sentry/node";
+import * as dotenv from "dotenv";
+dotenv.config();
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || "development",
+  tracesSampleRate: 1.0,
+});
+
+process.on("unhandledRejection", (reason) => {
+  Sentry.captureException(reason);
+  console.error("[UNHANDLED_REJECTION]", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  Sentry.captureException(error);
+  console.error("[UNCAUGHT_EXCEPTION]", error);
+});
 
 async function main() {
   console.log("[INFO] Starting twitter-ca.ts script execution...");

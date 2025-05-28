@@ -1,5 +1,6 @@
 import { Client } from "pg";
 import * as dotenv from "dotenv";
+import * as Sentry from "@sentry/node";
 
 dotenv.config();
 
@@ -37,15 +38,28 @@ export async function createJobState({
   status: string;
 }): Promise<JobState> {
   const client = new Client({ connectionString: DB_URL });
-  await client.connect();
-  const res = await client.query(
-    `INSERT INTO scraper_job_state (scraper_id, account_id, job_type, last_checkpoint, status)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *;`,
-    [scraper_id, account_id, job_type, last_checkpoint, status]
-  );
-  await client.end();
-  return res.rows[0];
+  try {
+    await client.connect();
+    const res = await client.query(
+      `INSERT INTO scraper_job_state (scraper_id, account_id, job_type, last_checkpoint, status)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *;`,
+      [scraper_id, account_id, job_type, last_checkpoint, status]
+    );
+    return res.rows[0];
+  } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "createJobState",
+        scraper_id,
+        account_id,
+        job_type,
+      },
+    });
+    throw error;
+  } finally {
+    await client.end();
+  }
 }
 
 export async function updateJobState(
@@ -53,16 +67,27 @@ export async function updateJobState(
   updates: Partial<Omit<JobState, "job_id">>
 ): Promise<JobState> {
   const client = new Client({ connectionString: DB_URL });
-  await client.connect();
-  const fields = Object.keys(updates);
-  const values = Object.values(updates);
-  const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
-  const query = `UPDATE scraper_job_state SET ${setClause}, updated_at = NOW() WHERE job_id = $${
-    fields.length + 1
-  } RETURNING *;`;
-  const res = await client.query(query, [...values, job_id]);
-  await client.end();
-  return res.rows[0];
+  try {
+    await client.connect();
+    const fields = Object.keys(updates);
+    const values = Object.values(updates);
+    const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
+    const query = `UPDATE scraper_job_state SET ${setClause}, updated_at = NOW() WHERE job_id = $${
+      fields.length + 1
+    } RETURNING *;`;
+    const res = await client.query(query, [...values, job_id]);
+    return res.rows[0];
+  } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "updateJobState",
+        job_id,
+      },
+    });
+    throw error;
+  } finally {
+    await client.end();
+  }
 }
 
 export async function getJobState(
