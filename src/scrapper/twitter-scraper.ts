@@ -28,11 +28,21 @@ export async function fetchProfile(scraper: any, screenName: string) {
   console.log(`[INFO] Fetching profile for screenName: ${screenName}`);
   try {
     const profile = await scraper.getProfile(screenName);
-    if (profile) {
-      console.log(`[SUCCESS] Profile fetched for screenName: ${screenName}`);
-    } else {
-      console.warn(`[WARN] No profile found for screenName: ${screenName}`);
+    if (!profile) {
+      const error = new Error(
+        `Profile not found for screenName: ${screenName}`
+      );
+      Sentry.captureException(error, {
+        extra: {
+          function: "fetchProfile",
+          screenName,
+          status: 404,
+        },
+      });
+      console.error(`[ERROR] Profile not found for screenName: ${screenName}`);
+      throw error;
     }
+    console.log(`[SUCCESS] Profile fetched for screenName: ${screenName}`);
     return profile;
   } catch (error) {
     Sentry.captureException(error, {
