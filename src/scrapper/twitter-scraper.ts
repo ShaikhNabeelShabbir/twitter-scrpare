@@ -9,7 +9,25 @@ export async function loginToTwitter(
 ) {
   console.log(`[INFO] Attempting login for username: ${username}`);
   try {
-    await scraper.login(username, password);
+    const loginResult = await scraper.login(username, password);
+    if (!loginResult || loginResult.ok === false || loginResult.error) {
+      const status = loginResult?.error?.status || loginResult?.status || 500;
+      const message =
+        loginResult?.error?.message ||
+        loginResult?.message ||
+        `Login failed for username: ${username}`;
+      const error = new Error(message);
+      Sentry.captureException(error, {
+        extra: {
+          function: "loginToTwitter",
+          username: "[MASKED]",
+          email: "[MASKED]",
+          status,
+        },
+      });
+      console.error(`[ERROR] ${message}`);
+      throw error;
+    }
     console.log(`[SUCCESS] Login successful for username: ${username}`);
   } catch (error) {
     Sentry.captureException(error, {
