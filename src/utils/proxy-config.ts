@@ -7,7 +7,7 @@ import {
 } from "undici";
 import {
   Scraper,
-  WaitingRateLimitStrategy,
+  ErrorRateLimitStrategy,
 } from "@the-convocation/twitter-scraper";
 
 export function createScraperWithProxy(proxyUrl?: string) {
@@ -31,39 +31,35 @@ export function createScraperWithProxy(proxyUrl?: string) {
   }
 
   return new Scraper({
+    rateLimitStrategy: new ErrorRateLimitStrategy(),
     fetch: (async (input: RequestInfo, init: RequestInit) => {
-      if (agent) {
-        console.log("[DEBUG] Dispatching request through proxy agent.");
-      } else {
-        console.log("[DEBUG] Dispatching request without proxy agent.");
-      }
-      console.log("[INFO] Fetching:", input);
-      return fetch(input, {
+      console.log("[INFO] Fetching:", input, init);
+      const response = await fetch(input, {
         ...init,
         ...(agent ? { dispatcher: agent } : {}),
-      })
-        .then((response) => {
-          console.log("[INFO] Response status:", response.status);
-          return response;
-        })
-        .catch((error) => {
-          console.error(
-            "[ERROR] Fetch error (proxy may be misconfigured):",
-            error
-          );
-          throw error;
-        });
+      });
+      console.log("[INFO] Response:", {
+        url: response.url,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      if (!response.ok) {
+        console.log("Response not ok, throwing error");
+        throw new Error(
+          `Response not ok: ${response.status} ${response.statusText}`
+        );
+      }
+      return response;
     }) as unknown as typeof globalThis.fetch,
     transform: {
       response(response) {
         console.log({
           status: response.status,
           statusText: response.statusText,
+          headers: JSON.stringify(response.headers, null, 2),
         });
-        // No process.exit(1) on 429; let WaitingRateLimitStrategy handle it
         return response;
       },
     },
-    rateLimitStrategy: new WaitingRateLimitStrategy(),
   });
 }
