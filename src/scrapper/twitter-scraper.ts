@@ -9,25 +9,7 @@ export async function loginToTwitter(
 ) {
   console.log(`[INFO] Attempting login for username: ${username}`);
   try {
-    const loginResult = await scraper.login(username, password);
-    if (!loginResult || loginResult.ok === false || loginResult.error) {
-      const status = loginResult?.error?.status || loginResult?.status || 500;
-      const message =
-        loginResult?.error?.message ||
-        loginResult?.message ||
-        `Login failed for username: ${username}`;
-      const error = new Error(message);
-      Sentry.captureException(error, {
-        extra: {
-          function: "loginToTwitter",
-          username: "[MASKED]",
-          email: "[MASKED]",
-          status,
-        },
-      });
-      console.error(`[ERROR] ${message}`);
-      throw error;
-    }
+    await scraper.login(username, password);
     console.log(`[SUCCESS] Login successful for username: ${username}`);
   } catch (error) {
     Sentry.captureException(error, {
@@ -46,31 +28,11 @@ export async function fetchProfile(scraper: any, screenName: string) {
   console.log(`[INFO] Fetching profile for screenName: ${screenName}`);
   try {
     const profile = await scraper.getProfile(screenName);
-
-    // Generalized error handling: treat any falsy or error-like result as a failure
-    if (
-      !profile ||
-      (profile && profile.error) ||
-      (profile && profile.ok === false)
-    ) {
-      const status = profile?.error?.status || profile?.status || 500;
-      const message =
-        profile?.error?.message ||
-        profile?.message ||
-        `Profile not found or error for screenName: ${screenName}`;
-      const error = new Error(message);
-      Sentry.captureException(error, {
-        extra: {
-          function: "fetchProfile",
-          screenName,
-          status,
-        },
-      });
-      console.error(`[ERROR] ${message}`);
-      throw error;
+    if (profile) {
+      console.log(`[SUCCESS] Profile fetched for screenName: ${screenName}`);
+    } else {
+      console.warn(`[WARN] No profile found for screenName: ${screenName}`);
     }
-
-    console.log(`[SUCCESS] Profile fetched for screenName: ${screenName}`);
     return profile;
   } catch (error) {
     Sentry.captureException(error, {
