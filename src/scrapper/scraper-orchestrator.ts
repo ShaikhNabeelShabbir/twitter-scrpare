@@ -165,6 +165,7 @@ export async function runScraperJob(scraper: any, jobType: string) {
     await updateScraperStatus(scraperId, "idle");
     await setAccountStatus(currentAccount.id, "idle");
     await resetFailureCount(currentAccount.id);
+    // Rest the account for 1 day after every successful use
     await setAccountRestUntil(currentAccount.id, 1);
     await updateJobState(jobState.job_id, { status: "completed" });
     Sentry.captureMessage("Job completed successfully", "info");
