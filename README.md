@@ -53,9 +53,19 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 ## Usage
 
 - **Run a scraper instance:**
+
   ```bash
-  npx ts-node src/scrapper/twitter-ca.ts
+  npx ts-node src/scrapper/twitter-ca.ts <twitter_username>
   ```
+
+  or, if running the compiled JavaScript:
+
+  ```bash
+  node dist/scrapper/twitter-ca.js <twitter_username>
+  ```
+
+  Replace `<twitter_username>` with the actual Twitter handle you want to scrape.
+
 - Multiple scraper instances can be run in parallel; the system will coordinate account usage via the database.
 
 ## Configuration
