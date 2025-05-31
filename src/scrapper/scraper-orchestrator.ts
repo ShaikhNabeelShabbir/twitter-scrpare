@@ -141,7 +141,7 @@ export async function runScraperJob(scraper: any, jobType: string) {
       message: "Fetching profile",
       level: "info",
     });
-    const profile = await fetchProfile(scraper, "NabeelShaikh03");
+    const profile = await fetchProfile(scraper, "thefernandocz");
     if (profile) {
       Sentry.addBreadcrumb({
         category: "scraper",
@@ -159,7 +159,7 @@ export async function runScraperJob(scraper: any, jobType: string) {
       message: "Fetching userId by screen name",
       level: "info",
     });
-    const userId = await fetchUserIdByScreenName(scraper, "NabeelShaikh03");
+    const userId = await fetchUserIdByScreenName(scraper, "thefernandocz");
     await updateJobState(jobState.job_id, { last_checkpoint: "me_fetched" });
     // On success, set mapping to idle and reset account
     await updateScraperStatus(scraperId, "idle");

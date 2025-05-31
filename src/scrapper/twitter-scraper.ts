@@ -30,6 +30,7 @@ export async function fetchProfile(scraper: any, screenName: string) {
     const profile = await scraper.getProfile(screenName);
     if (profile) {
       console.log(`[SUCCESS] Profile fetched for screenName: ${screenName}`);
+      console.log("profile", profile);
     } else {
       console.warn(`[WARN] No profile found for screenName: ${screenName}`);
     }
