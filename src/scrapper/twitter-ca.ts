@@ -22,9 +22,16 @@ process.on("uncaughtException", (error) => {
 
 async function main() {
   console.log("[INFO] Starting twitter-ca.ts script execution...");
+  const username = process.argv[2];
+  if (!username) {
+    console.error(
+      "[ERROR] Please provide a Twitter username as an argument. Usage: node dist/scrapper/twitter-ca.js <twitter_username>"
+    );
+    process.exit(1);
+  }
   const proxyUrl = process.env.PROXY_URL;
   const scraper = createScraperWithProxy(proxyUrl);
-  await runScraperJob(scraper, "twitter_profile");
+  await runScraperJob(scraper, "twitter_profile", username);
   console.log("[INFO] twitter-ca.ts script execution finished.");
 }
 

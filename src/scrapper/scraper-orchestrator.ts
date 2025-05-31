@@ -47,7 +47,11 @@ function getExponentialCooldown(
   return Math.min(cooldown, maxMinutes);
 }
 
-export async function runScraperJob(scraper: any, jobType: string) {
+export async function runScraperJob(
+  scraper: any,
+  jobType: string,
+  username: string
+) {
   const scraperId = uuidv4();
   let currentAccount: UserAccount | null = null;
   let jobState: JobState | null = null;
@@ -141,7 +145,7 @@ export async function runScraperJob(scraper: any, jobType: string) {
       message: "Fetching profile",
       level: "info",
     });
-    const profile = await fetchProfile(scraper, "thefernandocz");
+    const profile = await fetchProfile(scraper, username);
     if (profile) {
       Sentry.addBreadcrumb({
         category: "scraper",
@@ -159,7 +163,7 @@ export async function runScraperJob(scraper: any, jobType: string) {
       message: "Fetching userId by screen name",
       level: "info",
     });
-    const userId = await fetchUserIdByScreenName(scraper, "thefernandocz");
+    const userId = await fetchUserIdByScreenName(scraper, username);
     await updateJobState(jobState.job_id, { last_checkpoint: "me_fetched" });
     // On success, set mapping to idle and reset account
     await updateScraperStatus(scraperId, "idle");
