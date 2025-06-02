@@ -23,10 +23,10 @@ process.on("uncaughtException", (error) => {
 
 async function main() {
   console.log("[INFO] Starting twitter-ca.ts script execution...");
-  const username = process.argv[2];
+  const username = process.argv[2] || process.env.TWITTER_USERNAME;
   if (!username) {
     console.error(
-      "[ERROR] Please provide a Twitter username as an argument. Usage: node dist/scrapper/twitter-ca.js <twitter_username>"
+      "[ERROR] Please provide a Twitter username as an argument or set the TWITTER_USERNAME environment variable. Usage: node dist/scrapper/twitter-ca.js <twitter_username>"
     );
     process.exit(1);
   }

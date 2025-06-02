@@ -96,6 +96,41 @@ DB_NAME=your_db_name
 
 - Multiple scraper instances can be run in parallel; the system will coordinate account usage via the database.
 
+## Docker Usage
+
+You can run the entire system (including database migrations and seeding) using Docker. This is the recommended way for local development or deployment.
+
+### 1. Build the Docker images
+
+```bash
+docker-compose build
+```
+
+### 2. Run the scraper with a specific Twitter username
+
+Replace `jack` with any Twitter username you want to scrape:
+
+```bash
+TWITTER_USERNAME=jack docker-compose up
+```
+
+- This will:
+  1. Run all database migrations (creating/updating tables as needed)
+  2. Seed the database with accounts from `use-account.json`
+  3. Start the Twitter scraper for the username you provide
+
+### 3. Stop the containers
+
+```bash
+docker-compose down
+```
+
+### Notes
+
+- You only need to set the `TWITTER_USERNAME` environment variable at runtime.
+- All database setup and seeding is handled automatically on container startup.
+- You can change the username and re-run the command to scrape a different user.
+
 ## Project Structure
 
 ```
