@@ -16,6 +16,7 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 ## Architecture Highlights
 
 - **Database-Driven:** All state (accounts, scrapers, cooldowns) is persisted in PostgreSQL.
+- **Efficient Connection Management:** Each scraper job now creates a single PostgreSQL client/connection at the start of the run. This client is passed to all database helper functions throughout the job, and the connection is closed only after the job completes. This is more efficient and robust for long-running jobs, as it avoids the overhead and resource exhaustion risk of opening/closing a connection for every query.
 - **Stateless Scrapers:** Scraper instances are stateless and coordinate via the database.
 - **Extensible:** Designed for easy addition of features like proxy support, observability, and advanced account recycling.
 
@@ -68,6 +69,14 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 
 - Multiple scraper instances can be run in parallel; the system will coordinate account usage via the database.
 
+### Database Connection Management
+
+- **Single Connection Per Job:**
+  - When a scraper job starts, it creates and opens a single PostgreSQL client/connection.
+  - This client is passed to all database helper functions for the duration of the job.
+  - The connection is closed only after the job completes.
+  - This approach is more efficient and avoids the overhead and risk of exhausting connection limits that can occur if a new connection is opened and closed for every query.
+
 ## Configuration
 
 - All configuration is managed via environment variables. See `.env.example` for details.
@@ -80,8 +89,8 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 ```
 src/
   db/         # Database setup and population scripts
-  scrapper/   # Scraper logic
-  utils/      # Utility functions (e.g., password hashing)
+  scrapper/   # Scraper logic (now uses a single DB client per job)
+  utils/      # Utility functions (e.g., password hashing, DB helpers)
   logic/      # (Reserved for business logic modules)
 ```
 

@@ -2,6 +2,7 @@ import { runScraperJob } from "./scraper-orchestrator";
 import { createScraperWithProxy } from "../utils/proxy-config";
 import * as Sentry from "@sentry/node";
 import * as dotenv from "dotenv";
+import { Client } from "pg";
 dotenv.config();
 
 Sentry.init({
@@ -31,7 +32,19 @@ async function main() {
   }
   const proxyUrl = process.env.PROXY_URL;
   const scraper = createScraperWithProxy(proxyUrl);
-  await runScraperJob(scraper, "twitter_profile", username);
+  const client = new Client({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: parseInt(process.env.DB_PORT || "5432"),
+  });
+  try {
+    await client.connect();
+    await runScraperJob(scraper, "twitter_profile", username, client);
+  } finally {
+    await client.end();
+  }
   console.log("[INFO] twitter-ca.ts script execution finished.");
 }
 

@@ -24,22 +24,23 @@ export interface JobState {
   updated_at?: string;
 }
 
-export async function createJobState({
-  scraper_id,
-  account_id,
-  job_type,
-  last_checkpoint,
-  status,
-}: {
-  scraper_id: string;
-  account_id: string;
-  job_type: string;
-  last_checkpoint: string | null;
-  status: string;
-}): Promise<JobState> {
-  const client = new Client({ connectionString: DB_URL });
+export async function createJobState(
+  client: Client,
+  {
+    scraper_id,
+    account_id,
+    job_type,
+    last_checkpoint,
+    status,
+  }: {
+    scraper_id: string;
+    account_id: string;
+    job_type: string;
+    last_checkpoint: string | null;
+    status: string;
+  }
+): Promise<JobState> {
   try {
-    await client.connect();
     const res = await client.query(
       `INSERT INTO scraper_job_state (scraper_id, account_id, job_type, last_checkpoint, status)
        VALUES ($1, $2, $3, $4, $5)
@@ -57,18 +58,15 @@ export async function createJobState({
       },
     });
     throw error;
-  } finally {
-    await client.end();
   }
 }
 
 export async function updateJobState(
+  client: Client,
   job_id: string,
   updates: Partial<Omit<JobState, "job_id">>
 ): Promise<JobState> {
-  const client = new Client({ connectionString: DB_URL });
   try {
-    await client.connect();
     const fields = Object.keys(updates);
     const values = Object.values(updates);
     const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
@@ -85,35 +83,29 @@ export async function updateJobState(
       },
     });
     throw error;
-  } finally {
-    await client.end();
   }
 }
 
 export async function getJobState(
+  client: Client,
   job_id: string
 ): Promise<JobState | undefined> {
-  const client = new Client({ connectionString: DB_URL });
-  await client.connect();
   const res = await client.query(
     `SELECT * FROM scraper_job_state WHERE job_id = $1;`,
     [job_id]
   );
-  await client.end();
   return res.rows[0];
 }
 
 export async function getIncompleteJob(
+  client: Client,
   scraper_id: string,
   account_id: string,
   job_type: string
 ): Promise<JobState | undefined> {
-  const client = new Client({ connectionString: DB_URL });
-  await client.connect();
   const res = await client.query(
     `SELECT * FROM scraper_job_state WHERE scraper_id = $1 AND account_id = $2 AND job_type = $3 AND status IN ('running', 'failed') ORDER BY updated_at DESC LIMIT 1;`,
     [scraper_id, account_id, job_type]
   );
-  await client.end();
   return res.rows[0];
 }

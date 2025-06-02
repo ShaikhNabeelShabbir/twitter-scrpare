@@ -18,10 +18,10 @@ export interface UserAccount {
 
 const DB_CONNECTION_STRING = `postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 
-export async function getEligibleAccount(): Promise<UserAccount | null> {
-  const client = new Client({ connectionString: DB_CONNECTION_STRING });
+export async function getEligibleAccount(
+  client: Client
+): Promise<UserAccount | null> {
   try {
-    await client.connect();
     const selectQuery = `
       SELECT a.id, a.email, a.username
       FROM ${DB_TABLE_NAME} a
@@ -44,15 +44,15 @@ export async function getEligibleAccount(): Promise<UserAccount | null> {
       },
     });
     throw error;
-  } finally {
-    await client.end();
   }
 }
 
-export async function setAccountStatus(accountId: string, status: string) {
-  const client = new Client({ connectionString: DB_CONNECTION_STRING });
+export async function setAccountStatus(
+  client: Client,
+  accountId: string,
+  status: string
+) {
   try {
-    await client.connect();
     if (status === "active") {
       await client.query(
         `UPDATE ${DB_TABLE_NAME} SET current_status = $1, scraper_started_at = NOW(), last_used_at = NOW() WHERE id = $2`,
@@ -72,60 +72,52 @@ export async function setAccountStatus(accountId: string, status: string) {
       },
     });
     throw error;
-  } finally {
-    await client.end();
   }
 }
 
 export async function incrementFailureCount(
+  client: Client,
   accountId: string
 ): Promise<number> {
-  const client = new Client({ connectionString: DB_CONNECTION_STRING });
-  await client.connect();
   const { rows } = await client.query(
     `UPDATE ${DB_TABLE_NAME} SET failure_count = failure_count + 1 WHERE id = $1 RETURNING failure_count;`,
     [accountId]
   );
-  await client.end();
   return rows[0]?.failure_count;
 }
 
-export async function setCooldown(accountId: string, cooldownMinutes: number) {
-  const client = new Client({ connectionString: DB_CONNECTION_STRING });
-  await client.connect();
+export async function setCooldown(
+  client: Client,
+  accountId: string,
+  cooldownMinutes: number
+) {
   await client.query(
     `UPDATE ${DB_TABLE_NAME} SET cooldown_until = NOW() + INTERVAL '${cooldownMinutes} minutes' WHERE id = $1`,
     [accountId]
   );
-  await client.end();
 }
 
-export async function resetFailureCount(accountId: string) {
-  const client = new Client({ connectionString: DB_CONNECTION_STRING });
-  await client.connect();
+export async function resetFailureCount(client: Client, accountId: string) {
   await client.query(
     `UPDATE ${DB_TABLE_NAME} SET failure_count = 0, cooldown_until = NULL WHERE id = $1`,
     [accountId]
   );
-  await client.end();
 }
 
-export async function burnAccount(accountId: string) {
-  const client = new Client({ connectionString: DB_CONNECTION_STRING });
-  await client.connect();
+export async function burnAccount(client: Client, accountId: string) {
   await client.query(
     `UPDATE ${DB_TABLE_NAME} SET is_burned = TRUE, current_status = 'burned', scraper_started_at = NULL WHERE id = $1`,
     [accountId]
   );
-  await client.end();
 }
 
-export async function setAccountRestUntil(accountId: string, days: number) {
-  const client = new Client({ connectionString: DB_CONNECTION_STRING });
-  await client.connect();
+export async function setAccountRestUntil(
+  client: Client,
+  accountId: string,
+  days: number
+) {
   await client.query(
     `UPDATE ${DB_TABLE_NAME} SET rest_until = NOW() + INTERVAL '${days} days' WHERE id = $1`,
     [accountId]
   );
-  await client.end();
 }
