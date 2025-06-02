@@ -16,7 +16,8 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 ## Architecture Highlights
 
 - **Database-Driven:** All state (accounts, scrapers, cooldowns) is persisted in PostgreSQL.
-- **Efficient Connection Management:** Each scraper job now creates a single PostgreSQL client/connection at the start of the run. This client is passed to all database helper functions throughout the job, and the connection is closed only after the job completes. This is more efficient and robust for long-running jobs, as it avoids the overhead and resource exhaustion risk of opening/closing a connection for every query.
+- **Drizzle ORM:** The project uses [Drizzle ORM](https://orm.drizzle.team/) for type-safe schema management, migrations, and queries. All schema definitions are in TypeScript, and migrations are generated and applied using Drizzle Kit.
+- **Efficient Connection Management:** Each scraper job creates a single PostgreSQL client/connection at the start of the run, passed to all database helper functions, and closed only after the job completes.
 - **Stateless Scrapers:** Scraper instances are stateless and coordinate via the database.
 - **Extensible:** Designed for easy addition of features like proxy support, observability, and advanced account recycling.
 
@@ -25,6 +26,20 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 - Node.js (v18+ recommended)
 - PostgreSQL
 - npm
+
+## Environment Variables
+
+Create a `.env` file in your project root with the following variables:
+
+```
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=your_db_name
+```
+
+> **Note:** The application will throw an error and exit if any of these variables are missing.
 
 ## Installation
 
@@ -40,15 +55,27 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 3. **Configure environment variables:**
    - Copy `.env.example` to `.env` and fill in your database credentials and other settings.
 
-## Database Setup
+## Database Setup (with Drizzle ORM)
 
-1. **Create the main accounts table and load credentials:**
+1. **Generate migrations from the schema:**
    ```bash
-   npx ts-node src/db/populate-db.ts
+   npm run db:generate
    ```
-2. **Create the scraper mapping table:**
+2. **Apply migrations to your database:**
    ```bash
-   npx ts-node src/db/create-scraper-mapping-table.ts
+   npm run db:migrate
+   ```
+3. **Seed the database with initial data:**
+
+   ```bash
+   npm run db:seed
+   ```
+
+   - This will read from `use-account.json` and populate the `twitter_accounts` table.
+
+4. **(Optional) Open Drizzle Studio to inspect your DB:**
+   ```bash
+   npm run db:studio
    ```
 
 ## Usage
@@ -69,30 +96,22 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 
 - Multiple scraper instances can be run in parallel; the system will coordinate account usage via the database.
 
-### Database Connection Management
-
-- **Single Connection Per Job:**
-  - When a scraper job starts, it creates and opens a single PostgreSQL client/connection.
-  - This client is passed to all database helper functions for the duration of the job.
-  - The connection is closed only after the job completes.
-  - This approach is more efficient and avoids the overhead and risk of exhausting connection limits that can occur if a new connection is opened and closed for every query.
-
-## Configuration
-
-- All configuration is managed via environment variables. See `.env.example` for details.
-- Key variables:
-  - `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`: PostgreSQL connection
-  - `MAX_FAILURE_COUNT_TWITTER_CA`: Max allowed failures before burning an account
-
 ## Project Structure
 
 ```
 src/
-  db/         # Database setup and population scripts
-  scrapper/   # Scraper logic (now uses a single DB client per job)
+  db/         # Drizzle ORM schema, config, migrations, and seed scripts
+  scrapper/   # Scraper logic (uses a single DB client per job)
   utils/      # Utility functions (e.g., password hashing, DB helpers)
   logic/      # (Reserved for business logic modules)
 ```
+
+## Troubleshooting Drizzle ORM Setup
+
+- **Missing environment variables:** The app will throw an error if any DB env vars are missing.
+- **Migrations not applied:** Run `npm run db:generate` then `npm run db:migrate`.
+- **Seeding issues:** Ensure your `.env` is correct and `use-account.json` is present and valid.
+- **Wrong database:** Check the DB connection info printed by the seed script.
 
 ## Extending the System
 
