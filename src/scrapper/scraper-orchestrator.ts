@@ -190,11 +190,6 @@ export async function runScraperJob(
             : String(processingError),
       },
     });
-    console.error(
-      `[ERROR] Error processing Account ID: ${currentAccount?.id} (${currentAccount?.username}):`,
-      processingError,
-      processingError instanceof Error ? processingError.stack : ""
-    );
     await updateScraperStatus(client, scraperId, "cooldown");
     if (currentAccount) {
       const newFailureCount = await incrementFailureCount(
@@ -205,14 +200,8 @@ export async function runScraperJob(
       await setCooldown(client, currentAccount.id, cooldownMinutes);
       if (newFailureCount >= MAX_FAILURE_COUNT) {
         await burnAccount(client, currentAccount.id);
-        console.log(
-          `[SUCCESS] Account ID: ${currentAccount.id} (${currentAccount.username}) marked as 'burned' in database.`
-        );
       } else {
         await setAccountStatus(client, currentAccount.id, "idle");
-        console.log(
-          `[SUCCESS] Account ID: ${currentAccount.id} (${currentAccount.username}) status set to 'idle' in database after error.`
-        );
       }
     }
     if (jobState) {

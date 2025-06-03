@@ -32,12 +32,6 @@ export function validateTwitterResponse(
   response: any,
   context: string
 ): TwitterResponse {
-  // Log the full response for debugging
-  console.log(
-    `[DEBUG] Raw response in ${context}:`,
-    JSON.stringify(response, null, 2)
-  );
-
   if (!response) {
     throw new TwitterResponseError(`No response received`, context);
   }

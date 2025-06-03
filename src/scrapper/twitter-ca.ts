@@ -5,12 +5,6 @@ import * as dotenv from "dotenv";
 import { Client } from "pg";
 dotenv.config();
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV || "development",
-  tracesSampleRate: 1.0,
-});
-
 process.on("unhandledRejection", (reason) => {
   Sentry.captureException(reason);
   console.error("[UNHANDLED_REJECTION]", reason);
@@ -22,7 +16,6 @@ process.on("uncaughtException", (error) => {
 });
 
 async function main() {
-  console.log("[INFO] Starting twitter-ca.ts script execution...");
   const username = process.argv[2] || process.env.TWITTER_USERNAME;
   if (!username) {
     console.error(
@@ -45,7 +38,6 @@ async function main() {
   } finally {
     await client.end();
   }
-  console.log("[INFO] twitter-ca.ts script execution finished.");
 }
 
 main().catch((error) => {
