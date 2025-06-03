@@ -94,3 +94,26 @@ export async function fetchUserIdByScreenName(
     throw error;
   }
 }
+
+export async function fetchTweets(
+  scraper: any,
+  screenName: string,
+  limit = 1000
+) {
+  const tweets = [];
+  try {
+    for await (const tweet of scraper.getTweets(screenName)) {
+      tweets.push(tweet);
+      if (tweets.length >= limit) break;
+    }
+    return tweets;
+  } catch (error) {
+    Sentry.captureException(error, {
+      extra: {
+        function: "fetchTweets",
+        screenName,
+      },
+    });
+    throw error;
+  }
+}

@@ -26,6 +26,7 @@ import {
   fetchProfile,
   // fetchCurrentUser,
   fetchUserIdByScreenName,
+  fetchTweets,
 } from "./twitter-scraper";
 import * as Sentry from "@sentry/node";
 
@@ -169,6 +170,48 @@ export async function runScraperJob(
     await updateJobState(client, jobState.job_id, {
       last_checkpoint: "me_fetched",
     });
+
+    // Fetch tweets
+    Sentry.addBreadcrumb({
+      category: "scraper",
+      message: "Fetching tweets",
+      level: "info",
+    });
+    let tweets = [];
+    try {
+      tweets = await fetchTweets(scraper, username, 100);
+      Sentry.addBreadcrumb({
+        category: "scraper",
+        message: `Fetched ${tweets.length} tweets`,
+        level: "info",
+      });
+      // Log the count and a sample of the fetched tweets
+      if (tweets.length > 0) {
+        console.log(
+          `[INFO] Fetched ${tweets.length} tweets. Sample:`,
+          tweets.slice(0, 2)
+        );
+      } else {
+        console.log(`[INFO] No tweets fetched for user: ${username}`);
+      }
+      await updateJobState(client, jobState.job_id, {
+        last_checkpoint: "tweets_fetched",
+      });
+    } catch (tweetError) {
+      Sentry.captureException(tweetError, {
+        extra: {
+          scraperId,
+          accountId: currentAccount?.id,
+          jobType,
+          stage: "fetchTweets",
+          error:
+            tweetError instanceof Error
+              ? tweetError.message
+              : String(tweetError),
+        },
+      });
+      // Optionally, you can decide to fail the job here or continue
+    }
     // On success, set mapping to idle and reset account
     await updateScraperStatus(client, scraperId, "idle");
     await setAccountStatus(client, currentAccount.id, "idle");
