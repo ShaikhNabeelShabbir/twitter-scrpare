@@ -187,10 +187,8 @@ export async function runScraperJob(
       });
       // Log the count and a sample of the fetched tweets
       if (tweets.length > 0) {
-        console.log(
-          `[INFO] Fetched ${tweets.length} tweets. Sample:`,
-          tweets.slice(0, 2)
-        );
+        console.log(`[INFO] Fetched ${tweets.length} tweets. Sample:`, tweets);
+        console.log("length of tweets", tweets.length);
       } else {
         console.log(`[INFO] No tweets fetched for user: ${username}`);
       }
