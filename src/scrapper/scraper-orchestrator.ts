@@ -179,7 +179,7 @@ export async function runScraperJob(
     });
     let tweets = [];
     try {
-      tweets = await fetchTweets(scraper, username, 100);
+      tweets = await fetchTweets(scraper, username, 1000);
       Sentry.addBreadcrumb({
         category: "scraper",
         message: `Fetched ${tweets.length} tweets`,

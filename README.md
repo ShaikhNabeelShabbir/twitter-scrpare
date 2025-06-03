@@ -12,6 +12,7 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 - **Exponential Cooldown:** Accounts that repeatedly fail are put into exponentially increasing cooldowns, reducing the risk of bans.
 - **Error Handling:** Comprehensive error handling and logging at every stage.
 - **Account State Management:** Accounts can be marked as burned/disabled and are excluded from future runs.
+- **Configurable Tweet Fetch Limit:** The number of tweets fetched per account is now configurable, allowing you to control the volume of data retrieved per run.
 
 ## Architecture Highlights
 
@@ -37,6 +38,7 @@ DB_PASSWORD=your_db_password
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=your_db_name
+TWEET_FETCH_LIMIT=1000 # Optional: Set the max number of tweets to fetch per account (default: 1000)
 ```
 
 > **Note:** The application will throw an error and exit if any of these variables are missing.
@@ -96,6 +98,33 @@ DB_NAME=your_db_name
 
 - Multiple scraper instances can be run in parallel; the system will coordinate account usage via the database.
 
+### Configuring Tweet Fetch Limit
+
+- The number of tweets fetched per account is controlled by the `TWEET_FETCH_LIMIT` environment variable (default: 1000).
+- You can override this limit in the orchestrator or utility function call if needed.
+- Example:
+  ```js
+  // In scraper-orchestrator.ts
+  const tweetLimit = process.env.TWEET_FETCH_LIMIT
+    ? parseInt(process.env.TWEET_FETCH_LIMIT, 10)
+    : 1000;
+  tweets = await fetchTweets(scraper, username, tweetLimit);
+  ```
+
+### Troubleshooting Partial Fetches & Rate Limits
+
+- **Why am I not getting all tweets?**
+  - Twitter's frontend API and the scraping library may impose their own limits (e.g., 3200 tweets max, or rate limits).
+  - If you see fewer tweets than expected, it may be due to:
+    - Twitter's internal limits
+    - Rate limiting (try using a fresh account or proxy)
+    - The account being protected, suspended, or having deleted tweets
+    - The `TWEET_FETCH_LIMIT` or function argument being set too low
+- **How to debug:**
+  - Check logs for errors or warnings
+  - Log the last tweet's ID and timestamp for further analysis
+  - Review the [@the-convocation/twitter-scraper issues](https://github.com/the-convocation/twitter-scraper/issues) for similar reports
+
 ## Docker Usage
 
 You can run the entire system (including database migrations and seeding) using Docker. This is the recommended way for local development or deployment.
@@ -130,6 +159,7 @@ docker-compose down
 - You only need to set the `TWITTER_USERNAME` environment variable at runtime.
 - All database setup and seeding is handled automatically on container startup.
 - You can change the username and re-run the command to scrape a different user.
+- You can set `TWEET_FETCH_LIMIT` in your environment to control the number of tweets fetched per run.
 
 ## Project Structure
 
