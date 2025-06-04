@@ -58,6 +58,9 @@ export async function runScraperJob(
   let currentAccount: UserAccount | null = null;
   let jobState: JobState | null = null;
   let resumeCheckpoint: string | null = null;
+  let loginSuccess = false;
+  let attempts = 0;
+  const maxAttempts = 20; // Arbitrary high number, or set to number of accounts in pool
 
   Sentry.addBreadcrumb({
     category: "scraper",
@@ -66,13 +69,14 @@ export async function runScraperJob(
     data: { scraperId, jobType },
   });
 
-  try {
-    // Check global cap on active scrapers
-    const activeCount = await getActiveScraperCount(client);
-    if (activeCount >= MAX_ACTIVE_SCRAPERS) {
-      Sentry.captureMessage("Max active scrapers reached", "warning");
-      return;
-    }
+  // Check global cap on active scrapers
+  const activeCount = await getActiveScraperCount(client);
+  if (activeCount >= MAX_ACTIVE_SCRAPERS) {
+    Sentry.captureMessage("Max active scrapers reached", "warning");
+    return;
+  }
+
+  while (!loginSuccess && attempts < maxAttempts) {
     Sentry.addBreadcrumb({
       category: "scraper",
       message: "Selecting eligible account",
@@ -136,12 +140,40 @@ export async function runScraperJob(
       message: "Logging in to Twitter",
       level: "info",
     });
-    await loginToTwitter(
-      scraper,
-      currentAccount.username,
-      password,
-      currentAccount.email
-    );
+    try {
+      await loginToTwitter(
+        scraper,
+        currentAccount.username,
+        password,
+        currentAccount.email
+      );
+      loginSuccess = true;
+    } catch (loginError) {
+      Sentry.captureException(loginError, {
+        extra: { accountId: currentAccount.id },
+      });
+      const newFailureCount = await incrementFailureCount(
+        client,
+        currentAccount.id
+      );
+      const cooldownMinutes = getExponentialCooldown(newFailureCount);
+      await setCooldown(client, currentAccount.id, cooldownMinutes);
+      if (newFailureCount >= MAX_FAILURE_COUNT) {
+        await burnAccount(client, currentAccount.id);
+      } else {
+        await setAccountStatus(client, currentAccount.id, "idle");
+      }
+      attempts++;
+      continue; // Try next account
+    }
+  }
+
+  if (!loginSuccess) {
+    Sentry.captureMessage("All eligible accounts failed to login", "error");
+    return;
+  }
+
+  try {
     // Fetch profile
     Sentry.addBreadcrumb({
       category: "scraper",
@@ -156,9 +188,11 @@ export async function runScraperJob(
         level: "info",
       });
     }
-    await updateJobState(client, jobState.job_id, {
-      last_checkpoint: "profile_fetched",
-    });
+    if (jobState) {
+      await updateJobState(client, jobState.job_id, {
+        last_checkpoint: "profile_fetched",
+      });
+    }
     // Fetch current user
     // const me = await fetchCurrentUser(scraper);
     Sentry.addBreadcrumb({
@@ -167,9 +201,11 @@ export async function runScraperJob(
       level: "info",
     });
     const userId = await fetchUserIdByScreenName(scraper, username);
-    await updateJobState(client, jobState.job_id, {
-      last_checkpoint: "me_fetched",
-    });
+    if (jobState) {
+      await updateJobState(client, jobState.job_id, {
+        last_checkpoint: "me_fetched",
+      });
+    }
 
     // Fetch tweets
     Sentry.addBreadcrumb({
@@ -192,9 +228,11 @@ export async function runScraperJob(
       } else {
         console.log(`[INFO] No tweets fetched for user: ${username}`);
       }
-      await updateJobState(client, jobState.job_id, {
-        last_checkpoint: "tweets_fetched",
-      });
+      if (jobState) {
+        await updateJobState(client, jobState.job_id, {
+          last_checkpoint: "tweets_fetched",
+        });
+      }
     } catch (tweetError) {
       Sentry.captureException(tweetError, {
         extra: {
@@ -211,12 +249,16 @@ export async function runScraperJob(
       // Optionally, you can decide to fail the job here or continue
     }
     // On success, set mapping to idle and reset account
-    await updateScraperStatus(client, scraperId, "idle");
-    await setAccountStatus(client, currentAccount.id, "idle");
-    await resetFailureCount(client, currentAccount.id);
-    // Rest the account for 1 day after every successful use
-    await setAccountRestUntil(client, currentAccount.id, 1);
-    await updateJobState(client, jobState.job_id, { status: "completed" });
+    if (currentAccount) {
+      await updateScraperStatus(client, scraperId, "idle");
+      await setAccountStatus(client, currentAccount.id, "idle");
+      await resetFailureCount(client, currentAccount.id);
+      // Rest the account for 1 day after every successful use
+      await setAccountRestUntil(client, currentAccount.id, 1);
+    }
+    if (jobState) {
+      await updateJobState(client, jobState.job_id, { status: "completed" });
+    }
     Sentry.captureMessage("Job completed successfully", "info");
   } catch (processingError) {
     Sentry.captureException(processingError, {
