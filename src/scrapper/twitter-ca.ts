@@ -1,5 +1,6 @@
 import { runScraperJob } from "./scraper-orchestrator";
 import { createScraperWithProxy } from "../utils/proxy-config";
+import { scrapeAndStoreInsightSourceTweets } from "./scraping-flow";
 import * as Sentry from "@sentry/node";
 import * as dotenv from "dotenv";
 import { Client } from "pg";
@@ -16,13 +17,8 @@ process.on("uncaughtException", (error) => {
 });
 
 async function main() {
+  const isBatch = process.argv.includes("--batch");
   const username = process.argv[2] || process.env.TWITTER_USERNAME;
-  if (!username) {
-    console.error(
-      "[ERROR] Please provide a Twitter username as an argument or set the TWITTER_USERNAME environment variable. Usage: node dist/scrapper/twitter-ca.js <twitter_username>"
-    );
-    process.exit(1);
-  }
   const proxyUrl = process.env.PROXY_URL;
   const scraper = createScraperWithProxy(proxyUrl);
   const client = new Client({
@@ -34,7 +30,20 @@ async function main() {
   });
   try {
     await client.connect();
-    await runScraperJob(scraper, "twitter_profile", username, client);
+    if (isBatch) {
+      const tweetLimit = process.env.TWEET_FETCH_LIMIT
+        ? parseInt(process.env.TWEET_FETCH_LIMIT, 10)
+        : 20;
+      await scrapeAndStoreInsightSourceTweets(scraper, tweetLimit);
+    } else {
+      if (!username) {
+        console.error(
+          "[ERROR] Please provide a Twitter username as an argument or set the TWITTER_USERNAME environment variable. Usage: node dist/scrapper/twitter-ca.js <twitter_username>"
+        );
+        process.exit(1);
+      }
+      await runScraperJob(scraper, "twitter_profile", username, client);
+    }
   } finally {
     await client.end();
   }
