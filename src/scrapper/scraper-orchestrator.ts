@@ -29,6 +29,8 @@ import {
   fetchTweets,
 } from "./twitter-scraper";
 import * as Sentry from "@sentry/node";
+import { saveFetchResult } from "../db/fetch-results";
+import { NewFetchResult } from "../db/schema";
 
 const MAX_FAILURE_COUNT = parseInt(
   process.env.MAX_FAILURE_COUNT_TWITTER_CA || "3",
@@ -289,12 +291,30 @@ export async function runScraperJob(
     return;
   }
   let currentAccount, jobState, resumeCheckpoint;
+  const fetchStart = Date.now();
   try {
     ({ currentAccount, jobState, resumeCheckpoint } =
       await selectAndLoginAccount(scraper, client, jobType, 20));
     if (!currentAccount) return;
-    await handleJobState(scraper, username, client, jobState);
-    await fetchAndStoreTweets(scraper, username, client, jobState);
+    const profile = await fetchProfile(scraper, username);
+    const tweets = await fetchAndStoreTweets(
+      scraper,
+      username,
+      client,
+      jobState
+    );
+    const fetchEnd = Date.now();
+    if (profile) {
+      const fetchResult: NewFetchResult = {
+        accountId: currentAccount.id,
+        fetchedAt: new Date(),
+        dataRaw: JSON.stringify({ profile, tweets }),
+        dataParsed: JSON.stringify({ profile, tweets }),
+        proxyUsed: false, // Set to true if proxy info is available
+        durationMs: fetchEnd - fetchStart,
+      };
+      await saveFetchResult(fetchResult);
+    }
     if (currentAccount) {
       await updateScraperStatus(client, scraperId, "idle");
       await setAccountStatus(client, currentAccount.id, "idle");

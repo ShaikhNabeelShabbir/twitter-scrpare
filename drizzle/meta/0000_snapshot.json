@@ -1,9 +1,80 @@
 {
-  "id": "16c7f33b-598b-4125-9885-691ca26a4f24",
+  "id": "1257b35a-195b-4feb-9bc7-42b460f3fbbe",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.fetch_results": {
+      "name": "fetch_results",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "data_raw": {
+          "name": "data_raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_parsed": {
+          "name": "data_parsed",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "proxy_used": {
+          "name": "proxy_used",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "fetch_results_account_id_twitter_accounts_id_fk": {
+          "name": "fetch_results_account_id_twitter_accounts_id_fk",
+          "tableFrom": "fetch_results",
+          "tableTo": "twitter_accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.scraper_job_state": {
       "name": "scraper_job_state",
       "schema": "",

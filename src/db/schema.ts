@@ -47,6 +47,18 @@ export const scraperJobState = pgTable("scraper_job_state", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
+export const fetchResults = pgTable("fetch_results", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => twitterAccounts.id),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).defaultNow(),
+  dataRaw: text("data_raw").notNull(),
+  dataParsed: text("data_parsed"),
+  proxyUsed: boolean("proxy_used").notNull(),
+  durationMs: integer("duration_ms").notNull(),
+});
+
 export type TwitterAccount = typeof twitterAccounts.$inferSelect;
 export type NewTwitterAccount = typeof twitterAccounts.$inferInsert;
 
@@ -55,3 +67,6 @@ export type NewScraperMapping = typeof scraperMapping.$inferInsert;
 
 export type ScraperJobState = typeof scraperJobState.$inferSelect;
 export type NewScraperJobState = typeof scraperJobState.$inferInsert;
+
+export type FetchResult = typeof fetchResults.$inferSelect;
+export type NewFetchResult = typeof fetchResults.$inferInsert;

@@ -3,7 +3,7 @@ import { db } from "./config";
 
 async function main() {
   try {
-    await migrate(db, { migrationsFolder: "./src/db/migrations" });
+    await migrate(db, { migrationsFolder: "./drizzle" });
   } catch (err) {
     console.error("Migration failed!");
     console.error(err);
