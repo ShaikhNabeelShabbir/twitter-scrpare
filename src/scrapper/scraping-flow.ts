@@ -1,6 +1,10 @@
 import { fetchTweets } from "./twitter-scraper";
 import { updateJobState } from "../utils/job-state-helpers";
-import { saveFetchResult, saveInsightSourceTweet } from "../db/fetch-results";
+import {
+  saveFetchResult,
+  saveInsightSourceTweet,
+  upsertInsightSourceFromProfile,
+} from "../db/fetch-results";
 import { db } from "../db/config";
 import { insightSources } from "../db/schema";
 import * as Sentry from "@sentry/node";
@@ -69,6 +73,9 @@ export async function saveScrapingResult({
     durationMs,
   };
   await saveFetchResult(fetchResult);
+  if (profile) {
+    await upsertInsightSourceFromProfile(profile);
+  }
 }
 
 export async function scrapeAndStoreInsightSourceTweets(
