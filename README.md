@@ -13,6 +13,7 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 - **Error Handling:** Comprehensive error handling and logging at every stage.
 - **Account State Management:** Accounts can be marked as burned/disabled and are excluded from future runs.
 - **Configurable Tweet Fetch Limit:** The number of tweets fetched per account is now configurable, allowing you to control the volume of data retrieved per run.
+- **Modular Orchestrator:** The main scraper orchestrator is now split into smaller, focused modules for account management, job state management, and scraping logic, improving maintainability and extensibility.
 
 ## Architecture Highlights
 
@@ -21,6 +22,11 @@ This project is a highly-scalable, persisted bulk scraping system designed for r
 - **Efficient Connection Management:** Each scraper job creates a single PostgreSQL client/connection at the start of the run, passed to all database helper functions, and closed only after the job completes.
 - **Stateless Scrapers:** Scraper instances are stateless and coordinate via the database.
 - **Extensible:** Designed for easy addition of features like proxy support, observability, and advanced account recycling.
+- **Highly Modular Scraper Orchestrator:** The orchestrator logic is now split into:
+  - `account-flow.ts`: Handles account selection, login, cooldowns, and failure logic.
+  - `job-state-flow.ts`: Handles job state creation, updates, and checkpointing.
+  - `scraping-flow.ts`: Handles the actual scraping and result storage.
+  - `scraper-orchestrator.ts`: High-level orchestration, delegating to the above modules.
 
 ## Prerequisites
 
@@ -104,7 +110,7 @@ TWEET_FETCH_LIMIT=1000 # Optional: Set the max number of tweets to fetch per acc
 - You can override this limit in the orchestrator or utility function call if needed.
 - Example:
   ```js
-  // In scraper-orchestrator.ts
+  // In scraping-flow.ts
   const tweetLimit = process.env.TWEET_FETCH_LIMIT
     ? parseInt(process.env.TWEET_FETCH_LIMIT, 10)
     : 1000;
@@ -167,6 +173,11 @@ docker-compose down
 src/
   db/         # Drizzle ORM schema, config, migrations, and seed scripts
   scrapper/   # Scraper logic (uses a single DB client per job)
+    account-flow.ts     # Account selection, login, cooldowns, failure logic
+    job-state-flow.ts   # Job state creation, updates, checkpointing
+    scraping-flow.ts    # Scraping logic and result storage
+    scraper-orchestrator.ts # High-level orchestration, delegates to above modules
+    ... (other scraper and mapping files)
   utils/      # Utility functions (e.g., password hashing, DB helpers)
   logic/      # (Reserved for business logic modules)
 ```
@@ -183,6 +194,7 @@ src/
 - **Proxy Support:** Add proxy configuration and usage in the scraper logic.
 - **Observability:** Integrate with logging/metrics platforms for deeper insight.
 - **Account Recycling:** Implement logic to rest and recycle accounts after use.
+- **Further Modularity:** The orchestrator's modular design makes it easy to add new scraping flows, job types, or account management strategies.
 
 ## License
 
