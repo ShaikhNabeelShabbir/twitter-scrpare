@@ -1,4 +1,4 @@
-import { fetchTweets } from "./twitter-scraper";
+import { fetchTweets, loginToTwitter } from "./twitter-scraper";
 import { updateJobState } from "../utils/job-state-helpers";
 import {
   saveFetchResult,
@@ -80,8 +80,17 @@ export async function saveScrapingResult({
 
 export async function scrapeAndStoreInsightSourceTweets(
   scraper: any,
-  tweetLimit = 20
+  tweetLimit = 20,
+  credentials?: { username: string; password: string; email: string }
 ) {
+  if (credentials) {
+    await loginToTwitter(
+      scraper,
+      credentials.username,
+      credentials.password,
+      credentials.email
+    );
+  }
   // Fetch all insight sources
   const sources = await db.select().from(insightSources);
   console.log(`[INFO] Found ${sources.length} insight sources to scrape.`);
@@ -120,7 +129,7 @@ export async function scrapeAndStoreInsightSourceTweets(
           tweetVideos:
             tweet.videos?.map((video: any) => ({
               id: video.id,
-              url: video.url ?? "",
+              url: tweet.url ?? "",
             })) ?? [],
           tweetUrls: tweet.urls ?? [],
           tweetImagesDescriptions,

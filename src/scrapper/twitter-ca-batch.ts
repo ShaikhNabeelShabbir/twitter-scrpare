@@ -1,6 +1,6 @@
-import { runScraperJob } from "./scraper-orchestrator";
 import { createScraperWithProxy } from "../utils/proxy-config";
 import { scrapeAndStoreInsightSourceTweets } from "./scraping-flow";
+import { getPasswordFromCreds } from "../utils/hash-password";
 import * as Sentry from "@sentry/node";
 import * as dotenv from "dotenv";
 import { Client } from "pg";
@@ -17,8 +17,19 @@ process.on("uncaughtException", (error) => {
 });
 
 async function main() {
-  const isBatch = process.argv.includes("--batch");
-  const username = process.argv[2] || process.env.TWITTER_USERNAME;
+  const tweetLimit = process.env.TWEET_FETCH_LIMIT
+    ? parseInt(process.env.TWEET_FETCH_LIMIT, 10)
+    : 20;
+  const username = process.env.TWITTER_LOGIN_USERNAME;
+  const email = process.env.TWITTER_LOGIN_EMAIL;
+  if (!username || !email) {
+    console.error(
+      "[ERROR] Please set TWITTER_LOGIN_USERNAME and TWITTER_LOGIN_EMAIL in your environment."
+    );
+    process.exit(1);
+  }
+  const password = await getPasswordFromCreds({ username, email });
+  const credentials = { username, password, email };
   const proxyUrl = process.env.PROXY_URL;
   const scraper = createScraperWithProxy(proxyUrl);
   const client = new Client({
@@ -30,25 +41,7 @@ async function main() {
   });
   try {
     await client.connect();
-    if (isBatch) {
-      const tweetLimit = process.env.TWEET_FETCH_LIMIT
-        ? parseInt(process.env.TWEET_FETCH_LIMIT, 10)
-        : 20;
-      const credentials = {
-        username: process.env.TWITTER_LOGIN_USERNAME!,
-        password: process.env.TWITTER_LOGIN_PASSWORD!,
-        email: process.env.TWITTER_LOGIN_EMAIL!,
-      };
-      await scrapeAndStoreInsightSourceTweets(scraper, tweetLimit, credentials);
-    } else {
-      if (!username) {
-        console.error(
-          "[ERROR] Please provide a Twitter username as an argument or set the TWITTER_USERNAME environment variable. Usage: node dist/scrapper/twitter-ca.js <twitter_username>"
-        );
-        process.exit(1);
-      }
-      await runScraperJob(scraper, "twitter_profile", username, client);
-    }
+    await scrapeAndStoreInsightSourceTweets(scraper, tweetLimit, credentials);
   } finally {
     await client.end();
   }
