@@ -95,6 +95,18 @@ export async function scrapeAndStoreInsightSourceTweets(
     try {
       const tweets = await fetchTweets(scraper, source.username, tweetLimit);
       for (const tweet of tweets) {
+        const tweetImagesDescriptions = (tweet.photos || []).map(
+          (photo: any) => ({
+            url: photo.url,
+            description: photo.alt_text || "",
+          })
+        );
+        const tweetLinksDescriptions = (tweet.urls || []).map(
+          (urlObj: any) => ({
+            url: urlObj.expanded_url || urlObj.url,
+            description: urlObj.title || urlObj.description || "",
+          })
+        );
         const tweetRecord = {
           tweetId: tweet.id,
           tweetText: tweet.text,
@@ -111,8 +123,8 @@ export async function scrapeAndStoreInsightSourceTweets(
               url: video.url ?? "",
             })) ?? [],
           tweetUrls: tweet.urls ?? [],
-          tweetImagesDescriptions: [],
-          tweetLinksDescriptions: [],
+          tweetImagesDescriptions,
+          tweetLinksDescriptions,
           tweetCreatedAt: new Date(tweet.timeParsed),
           lastTweetImagesProcessedAt: null,
           lastTweetLinksProcessedAt: null,

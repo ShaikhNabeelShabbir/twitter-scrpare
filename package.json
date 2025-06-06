@@ -19,6 +19,7 @@
     "@the-convocation/twitter-scraper": "^0.17.0",
     "agent-twitter-client": "^0.0.18",
     "argon2": "^0.43.0",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
     "drizzle-kit": "^0.31.1",
     "drizzle-orm": "^0.44.1",
