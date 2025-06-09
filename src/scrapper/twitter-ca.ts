@@ -4,6 +4,7 @@ import { scrapeAndStoreInsightSourceTweets } from "./scraping-flow";
 import * as Sentry from "@sentry/node";
 import * as dotenv from "dotenv";
 import { Client } from "pg";
+import { exec } from "child_process";
 dotenv.config();
 
 process.on("unhandledRejection", (reason) => {
@@ -48,6 +49,20 @@ async function main() {
         process.exit(1);
       }
       await runScraperJob(scraper, "twitter_profile", username, client);
+      // After successful profile fetch, run the batch script
+      exec(
+        "node dist/scrapper/twitter-ca-batch.js",
+        (error, stdout, stderr) => {
+          if (error) {
+            console.error(`[BATCH ERROR] ${error.message}`);
+            return;
+          }
+          if (stderr) {
+            console.error(`[BATCH STDERR] ${stderr}`);
+          }
+          console.log(`[BATCH STDOUT] ${stdout}`);
+        }
+      );
     }
   } finally {
     await client.end();
