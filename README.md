@@ -86,50 +86,57 @@ TWEET_FETCH_LIMIT=1000 # Optional: Set the max number of tweets to fetch per acc
    npm run db:studio
    ```
 
-## Usage
+## Data Flow: Profile & Tweet Scraping
 
-- **Run a scraper instance:**
+The scraping process is split into two main steps for modularity and scalability:
 
+### 1. Profile Fetch & Source Population
+
+- **Command:**
   ```bash
-  npx ts-node src/scrapper/twitter-ca.ts <twitter_username>
+  node dist/scrapper/twitter-ca.js <twitter_username>
   ```
+- **What happens:**
+  - Scrapes the profile data for the specified username.
+  - Stores the result in the `fetch_results` table, including metadata (account used, proxy, duration, etc.).
+  - Extracts relevant profile information and **upserts** it into the `insight_sources` table (deduplicated list of target accounts to be scraped for tweets).
 
-  or, if running the compiled JavaScript:
+### 2. Batch Tweet Fetching
+
+- **Command:**
+  ```bash
+  node dist/scrapper/twitter-ca-batch.js
+  ```
+- **What happens:**
+  - Iterates over the accounts in the `insight_sources` table.
+  - For each account, fetches their tweets.
+  - Stores the tweets in the `insight_source_tweets` table.
+  - Tracks progress to allow resumability and avoid duplicate work.
+
+#### Summary Table
+
+| Command                                       | Table(s) Populated/Updated         | Purpose                                        |
+| --------------------------------------------- | ---------------------------------- | ---------------------------------------------- |
+| `node dist/scrapper/twitter-ca.js <username>` | `fetch_results`, `insight_sources` | Fetches profile, stores result, upserts source |
+| `node dist/scrapper/twitter-ca-batch.js`      | `insight_source_tweets`            | Fetches tweets for all sources, stores tweets  |
+
+## Usage (Updated)
+
+- **Step 1: Fetch a profile and populate sources**
 
   ```bash
   node dist/scrapper/twitter-ca.js <twitter_username>
   ```
 
-  Replace `<twitter_username>` with the actual Twitter handle you want to scrape.
+  - This will populate `fetch_results` and upsert into `insight_sources`.
 
-- Multiple scraper instances can be run in parallel; the system will coordinate account usage via the database.
-
-### Configuring Tweet Fetch Limit
-
-- The number of tweets fetched per account is controlled by the `TWEET_FETCH_LIMIT` environment variable (default: 1000).
-- You can override this limit in the orchestrator or utility function call if needed.
-- Example:
-  ```js
-  // In scraping-flow.ts
-  const tweetLimit = process.env.TWEET_FETCH_LIMIT
-    ? parseInt(process.env.TWEET_FETCH_LIMIT, 10)
-    : 1000;
-  tweets = await fetchTweets(scraper, username, tweetLimit);
+- **Step 2: Batch fetch tweets for all sources**
+  ```bash
+  node dist/scrapper/twitter-ca-batch.js
   ```
+  - This will fetch tweets for all accounts in `insight_sources` and store them in `insight_source_tweets`.
 
-### Troubleshooting Partial Fetches & Rate Limits
-
-- **Why am I not getting all tweets?**
-  - Twitter's frontend API and the scraping library may impose their own limits (e.g., 3200 tweets max, or rate limits).
-  - If you see fewer tweets than expected, it may be due to:
-    - Twitter's internal limits
-    - Rate limiting (try using a fresh account or proxy)
-    - The account being protected, suspended, or having deleted tweets
-    - The `TWEET_FETCH_LIMIT` or function argument being set too low
-- **How to debug:**
-  - Check logs for errors or warnings
-  - Log the last tweet's ID and timestamp for further analysis
-  - Review the [@the-convocation/twitter-scraper issues](https://github.com/the-convocation/twitter-scraper/issues) for similar reports
+> **Tip:** You can repeat Step 1 for as many usernames as you want to add to your sources, then run Step 2 to collect tweets in bulk.
 
 ## Docker Usage
 
@@ -203,3 +210,11 @@ MIT
 ## Maintainers
 
 - [Your Name or Team]
+
+## FAQ
+
+### How does the scraping flow work?
+
+- First, run `twitter-ca.js` with a username to fetch and store profile data. This also ensures the account is added to `insight_sources`.
+- Then, run `twitter-ca-batch.js` to fetch tweets for all accounts in `insight_sources` and store them in `insight_source_tweets`.
+- This separation allows you to control which accounts are scraped for tweets and to resume or repeat batch jobs as needed.
