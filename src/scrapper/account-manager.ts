@@ -114,10 +114,10 @@ export async function burnAccount(client: Client, accountId: string) {
 export async function setAccountRestUntil(
   client: Client,
   accountId: string,
-  days: number
+  minutes: number
 ) {
   await client.query(
-    `UPDATE ${DB_TABLE_NAME} SET rest_until = NOW() + INTERVAL '${days} days' WHERE id = $1`,
+    `UPDATE ${DB_TABLE_NAME} SET rest_until = NOW() + INTERVAL '${minutes} minutes' WHERE id = $1`,
     [accountId]
   );
 }
