@@ -1,7 +1,11 @@
 import { createScraperWithProxy } from "../utils/proxy-config";
 import { scrapeAndStoreInsightSourceTweets } from "./scraping-flow";
 import { getPasswordFromCreds } from "../utils/hash-password";
-import { getEligibleAccount } from "./account-manager";
+import {
+  getEligibleAccount,
+  UserAccount,
+  getAllEligibleAccounts,
+} from "./account-manager";
 import * as Sentry from "@sentry/node";
 import * as dotenv from "dotenv";
 import { Client } from "pg";
@@ -32,24 +36,42 @@ async function main() {
   });
   try {
     await client.connect();
-    const account = await getEligibleAccount(client);
-    if (!account) {
+    const accounts = await getAllEligibleAccounts(client);
+    if (accounts.length === 0) {
       console.error(
         "[ERROR] No eligible Twitter accounts available for login."
       );
       process.exit(1);
     }
-    const password = await getPasswordFromCreds({
-      username: account.username,
-      email: account.email,
-    });
-    const credentials = {
-      username: account.username,
-      password,
-      email: account.email,
-    };
-    console.log(`[INFO] Using account: ${account.username}`);
-    await scrapeAndStoreInsightSourceTweets(scraper, tweetLimit, credentials);
+    let success = false;
+    for (const account of accounts) {
+      const password = await getPasswordFromCreds({
+        username: account.username,
+        email: account.email,
+      });
+      const credentials = {
+        username: account.username,
+        password,
+        email: account.email,
+      };
+      console.log(`[INFO] Trying account: ${account.username}`);
+      try {
+        await scrapeAndStoreInsightSourceTweets(
+          scraper,
+          tweetLimit,
+          credentials
+        );
+        success = true;
+        break;
+      } catch (err) {
+        console.error(`[ERROR] Account ${account.username} failed:`, err);
+        // Try next account
+      }
+    }
+    if (!success) {
+      console.error("[FATAL] All eligible accounts failed. Exiting.");
+      process.exit(1);
+    }
   } finally {
     await client.end();
   }

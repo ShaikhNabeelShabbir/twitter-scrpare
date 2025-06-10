@@ -121,3 +121,21 @@ export async function setAccountRestUntil(
     [accountId]
   );
 }
+
+export async function getAllEligibleAccounts(
+  client: Client
+): Promise<UserAccount[]> {
+  const selectQuery = `
+    SELECT a.id, a.email, a.username
+    FROM ${DB_TABLE_NAME} a
+    LEFT JOIN scraper_mapping m ON a.id = m.account_id AND m.status = 'active'
+    WHERE a.is_active = TRUE
+      AND a.is_burned = FALSE
+      AND (a.cooldown_until IS NULL OR a.cooldown_until < NOW())
+      AND (a.rest_until IS NULL OR a.rest_until < NOW())
+      AND m.account_id IS NULL
+    ORDER BY a.last_used_at ASC NULLS FIRST;
+  `;
+  const dbResult = await client.query(selectQuery);
+  return dbResult.rows as UserAccount[];
+}
