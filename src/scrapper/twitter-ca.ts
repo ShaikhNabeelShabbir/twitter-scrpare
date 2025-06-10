@@ -19,7 +19,11 @@ process.on("uncaughtException", (error) => {
 
 async function main() {
   const isBatch = process.argv.includes("--batch");
-  const username = process.argv[2] || process.env.TWITTER_USERNAME;
+  // Get all usernames passed as arguments (after the script name)
+  const usernames = process.argv
+    .slice(2)
+    .filter((arg) => !arg.startsWith("--"));
+
   const proxyUrl = process.env.PROXY_URL;
   const scraper = createScraperWithProxy(proxyUrl);
   const client = new Client({
@@ -42,27 +46,16 @@ async function main() {
       };
       await scrapeAndStoreInsightSourceTweets(scraper, tweetLimit, credentials);
     } else {
-      if (!username) {
+      if (usernames.length === 0) {
         console.error(
-          "[ERROR] Please provide a Twitter username as an argument or set the TWITTER_USERNAME environment variable. Usage: node dist/scrapper/twitter-ca.js <twitter_username>"
+          "[ERROR] Please provide at least one Twitter username as an argument. Usage: node dist/scrapper/twitter-ca.js <twitter_username1> <twitter_username2> ..."
         );
         process.exit(1);
       }
-      await runScraperJob(scraper, "twitter_profile", username, client);
-      // After successful profile fetch, run the batch script
-      exec(
-        "node dist/scrapper/twitter-ca-batch.js",
-        (error, stdout, stderr) => {
-          if (error) {
-            console.error(`[BATCH ERROR] ${error.message}`);
-            return;
-          }
-          if (stderr) {
-            console.error(`[BATCH STDERR] ${stderr}`);
-          }
-          console.log(`[BATCH STDOUT] ${stdout}`);
-        }
-      );
+      for (const username of usernames) {
+        await runScraperJob(scraper, "twitter_profile", username, client);
+        // Optionally, scrape tweets for this username here if desired
+      }
     }
   } finally {
     await client.end();
