@@ -8,8 +8,14 @@ import {
 import { db } from "../db/config";
 import { insightSources } from "../db/schema";
 import * as Sentry from "@sentry/node";
-import { getEligibleAccount } from "./account-manager";
+import {
+  getEligibleAccount,
+  incrementFailureCount,
+  setCooldown,
+  burnAccount,
+} from "./account-manager";
 import { getPasswordFromCreds } from "../utils/hash-password";
+import { getExponentialCooldown } from "./account-flow";
 
 export async function fetchAndStoreTweets(
   scraper: any,
@@ -103,7 +109,6 @@ export async function scrapeAndStoreInsightSourceTweets(
         break;
       }
       if (usedAccounts.has(account.id)) {
-        // Avoid retrying same account in this loop
         attempt++;
         continue;
       }
@@ -176,6 +181,15 @@ export async function scrapeAndStoreInsightSourceTweets(
           `[ERROR] [${now}] Failed to scrape @${source.username} with @${account.username}:`,
           error
         );
+        const newFailureCount = await incrementFailureCount(client, account.id);
+        const cooldownMinutes = getExponentialCooldown(newFailureCount);
+        await setCooldown(client, account.id, cooldownMinutes);
+        if (newFailureCount >= 3) {
+          await burnAccount(client, account.id);
+          console.error(
+            `[WARN] Account @${account.username} burned after ${newFailureCount} failures.`
+          );
+        }
         if (error && typeof error === "object") {
           if ("message" in error) {
             console.error(
