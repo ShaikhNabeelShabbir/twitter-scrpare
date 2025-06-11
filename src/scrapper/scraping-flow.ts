@@ -8,6 +8,8 @@ import {
 import { db } from "../db/config";
 import { insightSources } from "../db/schema";
 import * as Sentry from "@sentry/node";
+import { getEligibleAccount } from "./account-manager";
+import { getPasswordFromCreds } from "../utils/hash-password";
 
 export async function fetchAndStoreTweets(
   scraper: any,
@@ -81,16 +83,8 @@ export async function saveScrapingResult({
 export async function scrapeAndStoreInsightSourceTweets(
   scraper: any,
   tweetLimit = 20,
-  credentials?: { username: string; password: string; email: string }
+  client: any
 ) {
-  if (credentials) {
-    await loginToTwitter(
-      scraper,
-      credentials.username,
-      credentials.password,
-      credentials.email
-    );
-  }
   // Fetch all insight sources
   const sources = await db.select().from(insightSources);
   console.log(`[INFO] Found ${sources.length} insight sources to scrape.`);
@@ -98,95 +92,135 @@ export async function scrapeAndStoreInsightSourceTweets(
   let count = 0;
   for (const source of sources) {
     count++;
-    console.log(
-      `[INFO] (${count}/${sources.length}) Scraping @${source.username}`
-    );
-    try {
-      const tweets = await fetchTweets(scraper, source.username, tweetLimit);
-      for (const tweet of tweets) {
-        const tweetImagesDescriptions = (tweet.photos || []).map(
-          (photo: any) => ({
-            url: photo.url,
-            description: photo.alt_text || "",
-          })
-        );
-        const tweetLinksDescriptions = (tweet.urls || []).map(
-          (urlObj: any) => ({
-            url: urlObj.expanded_url || urlObj.url,
-            description: urlObj.title || urlObj.description || "",
-          })
-        );
-        const tweetRecord = {
-          tweetId: tweet.id,
-          tweetText: tweet.text,
-          tweetUrl: tweet.permanentUrl,
-          tweetAuthorId: source.id,
-          tweetPhotos:
-            tweet.photos?.map((photo: any) => ({
-              id: photo.id,
-              url: photo.url,
-            })) ?? [],
-          tweetVideos:
-            tweet.videos?.map((video: any) => ({
-              id: video.id,
-              url: tweet.url ?? "",
-            })) ?? [],
-          tweetUrls: tweet.urls ?? [],
-          tweetImagesDescriptions,
-          tweetLinksDescriptions,
-          tweetCreatedAt: new Date(tweet.timeParsed),
-          lastTweetImagesProcessedAt: null,
-          lastTweetLinksProcessedAt: null,
-          isPushedToAutoRag: false,
-          createdAt: new Date(),
-        };
-        await saveInsightSourceTweet(tweetRecord);
-        totalTweets++;
+    let attempt = 0;
+    let success = false;
+    let lastError = null;
+    let usedAccounts = new Set();
+    while (attempt < 3 && !success) {
+      const account = await getEligibleAccount(client);
+      if (!account) {
+        console.error(`[ERROR] No eligible accounts available for retry.`);
+        break;
       }
-      console.log(
-        `[INFO] Saved ${tweets.length} tweets for @${source.username}`
-      );
-    } catch (error) {
-      const now = new Date().toISOString();
-      console.error(
-        `[ERROR] [${now}] Failed to scrape @${source.username}:`,
-        error
-      );
-      if (error && typeof error === "object") {
-        // Log known fields
-        if ("message" in error) {
-          console.error(
-            `[ERROR] [${now}] error.message:`,
-            (error as any).message
+      if (usedAccounts.has(account.id)) {
+        // Avoid retrying same account in this loop
+        attempt++;
+        continue;
+      }
+      usedAccounts.add(account.id);
+      const password = await getPasswordFromCreds({
+        username: account.username,
+        email: account.email,
+      });
+      try {
+        await loginToTwitter(
+          scraper,
+          account.username,
+          password,
+          account.email
+        );
+        console.log(
+          `[INFO] [${attempt + 1}/3] Using account: @${
+            account.username
+          } to scrape @${source.username}`
+        );
+        const tweets = await fetchTweets(scraper, source.username, tweetLimit);
+        for (const tweet of tweets) {
+          const tweetImagesDescriptions = (tweet.photos || []).map(
+            (photo: any) => ({
+              url: photo.url,
+              description: photo.alt_text || "",
+            })
           );
-        }
-        if ("stack" in error) {
-          console.error(`[ERROR] [${now}] error.stack:`, (error as any).stack);
-        }
-        if ("status" in error) {
-          console.error(
-            `[ERROR] [${now}] error.status:`,
-            (error as any).status
+          const tweetLinksDescriptions = (tweet.urls || []).map(
+            (urlObj: any) => ({
+              url: urlObj.expanded_url || urlObj.url,
+              description: urlObj.title || urlObj.description || "",
+            })
           );
+          const tweetRecord = {
+            tweetId: tweet.id,
+            tweetText: tweet.text,
+            tweetUrl: tweet.permanentUrl,
+            tweetAuthorId: source.id,
+            tweetPhotos:
+              tweet.photos?.map((photo: any) => ({
+                id: photo.id,
+                url: photo.url,
+              })) ?? [],
+            tweetVideos:
+              tweet.videos?.map((video: any) => ({
+                id: video.id,
+                url: tweet.url ?? "",
+              })) ?? [],
+            tweetUrls: tweet.urls ?? [],
+            tweetImagesDescriptions,
+            tweetLinksDescriptions,
+            tweetCreatedAt: new Date(tweet.timeParsed),
+            lastTweetImagesProcessedAt: null,
+            lastTweetLinksProcessedAt: null,
+            isPushedToAutoRag: false,
+            createdAt: new Date(),
+          };
+          await saveInsightSourceTweet(tweetRecord);
+          totalTweets++;
         }
-        if ("response" in error) {
-          console.error(
-            `[ERROR] [${now}] error.response:`,
-            (error as any).response
-          );
-        }
-        // Log all enumerable properties
-        for (const key of Object.keys(error)) {
-          if (!["message", "stack", "status", "response"].includes(key)) {
+        console.log(
+          `[INFO] Saved ${tweets.length} tweets for @${source.username}`
+        );
+        success = true;
+      } catch (error) {
+        lastError = error;
+        const now = new Date().toISOString();
+        console.error(
+          `[ERROR] [${now}] Failed to scrape @${source.username} with @${account.username}:`,
+          error
+        );
+        if (error && typeof error === "object") {
+          if ("message" in error) {
             console.error(
-              `[ERROR] [${now}] error[${key}]:`,
-              (error as any)[key]
+              `[ERROR] [${now}] error.message:`,
+              (error as any).message
             );
           }
+          if ("stack" in error) {
+            console.error(
+              `[ERROR] [${now}] error.stack:`,
+              (error as any).stack
+            );
+          }
+          if ("status" in error) {
+            console.error(
+              `[ERROR] [${now}] error.status:`,
+              (error as any).status
+            );
+          }
+          if ("response" in error) {
+            console.error(
+              `[ERROR] [${now}] error.response:`,
+              (error as any).response
+            );
+          }
+          for (const key of Object.keys(error)) {
+            if (!["message", "stack", "status", "response"].includes(key)) {
+              console.error(
+                `[ERROR] [${now}] error[${key}]:`,
+                (error as any)[key]
+              );
+            }
+          }
         }
+        Sentry.captureException(error, {
+          extra: { username: source.username, account: account.username },
+        });
+        attempt++;
       }
-      Sentry.captureException(error, { extra: { username: source.username } });
-      continue;
+    }
+    if (!success) {
+      console.error(
+        `[FATAL] Could not scrape @${source.username} with any eligible account. Last error:`,
+        lastError
+      );
     }
   }
   console.log(`[INFO] Finished scraping. Total tweets saved: ${totalTweets}`);

@@ -56,11 +56,7 @@ async function main() {
       };
       console.log(`[INFO] Trying account: ${account.username}`);
       try {
-        await scrapeAndStoreInsightSourceTweets(
-          scraper,
-          tweetLimit,
-          credentials
-        );
+        await scrapeAndStoreInsightSourceTweets(scraper, tweetLimit, client);
         success = true;
         break;
       } catch (err) {
