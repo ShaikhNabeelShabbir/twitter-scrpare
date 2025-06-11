@@ -147,7 +147,44 @@ export async function scrapeAndStoreInsightSourceTweets(
         `[INFO] Saved ${tweets.length} tweets for @${source.username}`
       );
     } catch (error) {
-      console.error(`[ERROR] Failed to scrape @${source.username}:`, error);
+      const now = new Date().toISOString();
+      console.error(
+        `[ERROR] [${now}] Failed to scrape @${source.username}:`,
+        error
+      );
+      if (error && typeof error === "object") {
+        // Log known fields
+        if ("message" in error) {
+          console.error(
+            `[ERROR] [${now}] error.message:`,
+            (error as any).message
+          );
+        }
+        if ("stack" in error) {
+          console.error(`[ERROR] [${now}] error.stack:`, (error as any).stack);
+        }
+        if ("status" in error) {
+          console.error(
+            `[ERROR] [${now}] error.status:`,
+            (error as any).status
+          );
+        }
+        if ("response" in error) {
+          console.error(
+            `[ERROR] [${now}] error.response:`,
+            (error as any).response
+          );
+        }
+        // Log all enumerable properties
+        for (const key of Object.keys(error)) {
+          if (!["message", "stack", "status", "response"].includes(key)) {
+            console.error(
+              `[ERROR] [${now}] error[${key}]:`,
+              (error as any)[key]
+            );
+          }
+        }
+      }
       Sentry.captureException(error, { extra: { username: source.username } });
       continue;
     }
