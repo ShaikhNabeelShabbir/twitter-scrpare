@@ -6,7 +6,7 @@ import {
   upsertInsightSourceFromProfile,
 } from "../db/fetch-results";
 import { db } from "../db/config";
-import { insightSources } from "../db/schema";
+import { insightSources, insightSourceTweets } from "../db/schema";
 import * as Sentry from "@sentry/node";
 import {
   getEligibleAccount,
@@ -37,10 +37,10 @@ export async function fetchAndStoreTweets(
       level: "info",
     });
     if (tweets.length > 0) {
-      console.log(`[INFO] Fetched ${tweets.length} tweets. Sample:`, tweets);
-      console.log("length of tweets", tweets.length);
+      // Removed: console.log(`[INFO] Fetched ${tweets.length} tweets. Sample:`, tweets);
+      // Removed: console.log("length of tweets", tweets.length);
     } else {
-      console.log(`[INFO] No tweets fetched for user: ${username}`);
+      // Removed: console.log(`[INFO] No tweets fetched for user: ${username}`);
     }
     if (jobState) {
       await updateJobState(client, jobState.job_id, {
@@ -93,149 +93,216 @@ export async function scrapeAndStoreInsightSourceTweets(
 ) {
   // Fetch all insight sources
   const sources = await db.select().from(insightSources);
-  console.log(`[INFO] Found ${sources.length} insight sources to scrape.`);
   let totalTweets = 0;
   let count = 0;
+  const skippedSources = [];
   for (const source of sources) {
     count++;
     let attempt = 0;
     let success = false;
     let lastError = null;
     let usedAccounts = new Set();
-    while (attempt < 3 && !success) {
-      const account = await getEligibleAccount(client);
-      if (!account) {
-        console.error(`[ERROR] No eligible accounts available for retry.`);
-        break;
-      }
-      if (usedAccounts.has(account.id)) {
-        attempt++;
-        continue;
-      }
-      usedAccounts.add(account.id);
-      const password = await getPasswordFromCreds({
-        username: account.username,
-        email: account.email,
-      });
-      try {
-        await loginToTwitter(
-          scraper,
-          account.username,
-          password,
-          account.email
-        );
-        console.log(
-          `[INFO] [${attempt + 1}/3] Using account: @${
-            account.username
-          } to scrape @${source.username}`
-        );
-        const tweets = await fetchTweets(scraper, source.username, tweetLimit);
-        for (const tweet of tweets) {
-          const tweetImagesDescriptions = (tweet.photos || []).map(
-            (photo: any) => ({
-              url: photo.url,
-              description: photo.alt_text || "",
-            })
-          );
-          const tweetLinksDescriptions = (tweet.urls || []).map(
-            (urlObj: any) => ({
-              url: urlObj.expanded_url || urlObj.url,
-              description: urlObj.title || urlObj.description || "",
-            })
-          );
-          const tweetRecord = {
-            tweetId: tweet.id,
-            tweetText: tweet.text,
-            tweetUrl: tweet.permanentUrl,
-            tweetAuthorId: source.id,
-            tweetPhotos:
-              tweet.photos?.map((photo: any) => ({
-                id: photo.id,
-                url: photo.url,
-              })) ?? [],
-            tweetVideos:
-              tweet.videos?.map((video: any) => ({
-                id: video.id,
-                url: tweet.url ?? "",
-              })) ?? [],
-            tweetUrls: tweet.urls ?? [],
-            tweetImagesDescriptions,
-            tweetLinksDescriptions,
-            tweetCreatedAt: new Date(tweet.timeParsed),
-            lastTweetImagesProcessedAt: null,
-            lastTweetLinksProcessedAt: null,
-            isPushedToAutoRag: false,
-            createdAt: new Date(),
-          };
-          await saveInsightSourceTweet(tweetRecord);
-          totalTweets++;
+    let timedOut = false;
+    const scrapePromise = (async () => {
+      while (attempt < 3 && !success) {
+        const account = await getEligibleAccount(client);
+        if (!account) {
+          break;
         }
-        console.log(
-          `[INFO] Saved ${tweets.length} tweets for @${source.username}`
-        );
-        success = true;
-      } catch (error) {
-        lastError = error;
-        const now = new Date().toISOString();
-        console.error(
-          `[ERROR] [${now}] Failed to scrape @${source.username} with @${account.username}:`,
-          error
-        );
-        const newFailureCount = await incrementFailureCount(client, account.id);
-        const cooldownMinutes = getExponentialCooldown(newFailureCount);
-        await setCooldown(client, account.id, cooldownMinutes);
-        if (newFailureCount >= 3) {
-          await burnAccount(client, account.id);
-          console.error(
-            `[WARN] Account @${account.username} burned after ${newFailureCount} failures.`
-          );
+        if (usedAccounts.has(account.id)) {
+          attempt++;
+          continue;
         }
-        if (error && typeof error === "object") {
-          if ("message" in error) {
-            console.error(
-              `[ERROR] [${now}] error.message:`,
-              (error as any).message
-            );
-          }
-          if ("stack" in error) {
-            console.error(
-              `[ERROR] [${now}] error.stack:`,
-              (error as any).stack
-            );
-          }
-          if ("status" in error) {
-            console.error(
-              `[ERROR] [${now}] error.status:`,
-              (error as any).status
-            );
-          }
-          if ("response" in error) {
-            console.error(
-              `[ERROR] [${now}] error.response:`,
-              (error as any).response
-            );
-          }
-          for (const key of Object.keys(error)) {
-            if (!["message", "stack", "status", "response"].includes(key)) {
-              console.error(
-                `[ERROR] [${now}] error[${key}]:`,
-                (error as any)[key]
-              );
-            }
-          }
-        }
-        Sentry.captureException(error, {
-          extra: { username: source.username, account: account.username },
+        usedAccounts.add(account.id);
+        const password = await getPasswordFromCreds({
+          username: account.username,
+          email: account.email,
         });
-        attempt++;
+        try {
+          await loginToTwitter(
+            scraper,
+            account.username,
+            password,
+            account.email
+          );
+          const tweets = await fetchTweets(
+            scraper,
+            source.username,
+            tweetLimit
+          );
+          // Batch insert tweets
+          if (tweets.length > 0) {
+            const tweetRecords = tweets.map((tweet: any) => {
+              const tweetImagesDescriptions = (tweet.photos || []).map(
+                (photo: any) => ({
+                  url: photo.url,
+                  description: photo.alt_text || "",
+                })
+              );
+              const tweetLinksDescriptions = (tweet.urls || []).map(
+                (urlObj: any) => ({
+                  url: urlObj.expanded_url || urlObj.url,
+                  description: urlObj.title || urlObj.description || "",
+                })
+              );
+              return {
+                tweetId: tweet.id,
+                tweetText: tweet.text,
+                tweetUrl: tweet.permanentUrl,
+                tweetAuthorId: source.id,
+                tweetPhotos:
+                  tweet.photos?.map((photo: any) => ({
+                    id: photo.id,
+                    url: photo.url,
+                  })) ?? [],
+                tweetVideos:
+                  tweet.videos?.map((video: any) => ({
+                    id: video.id,
+                    url: tweet.url ?? "",
+                  })) ?? [],
+                tweetUrls: tweet.urls ?? [],
+                tweetImagesDescriptions,
+                tweetLinksDescriptions,
+                tweetCreatedAt: new Date(tweet.timeParsed),
+                lastTweetImagesProcessedAt: null,
+                lastTweetLinksProcessedAt: null,
+                isPushedToAutoRag: false,
+                createdAt: new Date(),
+              };
+            });
+            await db
+              .insert(insightSourceTweets)
+              .values(tweetRecords)
+              .onConflictDoNothing();
+            totalTweets += tweetRecords.length;
+          }
+          success = true;
+        } catch (error) {
+          lastError = error;
+          const newFailureCount = await incrementFailureCount(
+            client,
+            account.id
+          );
+          const cooldownMinutes = getExponentialCooldown(newFailureCount);
+          await setCooldown(client, account.id, cooldownMinutes);
+          if (newFailureCount >= 3) {
+            await burnAccount(client, account.id);
+          }
+        }
       }
+    })();
+    // Timeout logic: skip source if it takes longer than 2 minutes
+    await Promise.race([
+      scrapePromise,
+      new Promise((resolve) =>
+        setTimeout(() => {
+          timedOut = true;
+          resolve(undefined);
+        }, 2 * 60 * 1000)
+      ),
+    ]);
+    if (timedOut) {
+      skippedSources.push(source);
+      continue;
     }
     if (!success) {
-      console.error(
-        `[FATAL] Could not scrape @${source.username} with any eligible account. Last error:`,
-        lastError
-      );
+      // Only log fatal error for this source
+      continue;
     }
   }
-  console.log(`[INFO] Finished scraping. Total tweets saved: ${totalTweets}`);
+  // Retry skipped sources at the end
+  for (const source of skippedSources) {
+    // Same logic as above, but only one attempt and no further retry if timeout
+    let attempt = 0;
+    let success = false;
+    let usedAccounts = new Set();
+    let timedOut = false;
+    const scrapePromise = (async () => {
+      while (attempt < 3 && !success) {
+        const account = await getEligibleAccount(client);
+        if (!account) {
+          break;
+        }
+        if (usedAccounts.has(account.id)) {
+          attempt++;
+          continue;
+        }
+        usedAccounts.add(account.id);
+        const password = await getPasswordFromCreds({
+          username: account.username,
+          email: account.email,
+        });
+        try {
+          await loginToTwitter(
+            scraper,
+            account.username,
+            password,
+            account.email
+          );
+          const tweets = await fetchTweets(
+            scraper,
+            source.username,
+            tweetLimit
+          );
+          if (tweets.length > 0) {
+            const tweetRecords = tweets.map((tweet: any) => {
+              const tweetImagesDescriptions = (tweet.photos || []).map(
+                (photo: any) => ({
+                  url: photo.url,
+                  description: photo.alt_text || "",
+                })
+              );
+              const tweetLinksDescriptions = (tweet.urls || []).map(
+                (urlObj: any) => ({
+                  url: urlObj.expanded_url || urlObj.url,
+                  description: urlObj.title || urlObj.description || "",
+                })
+              );
+              return {
+                tweetId: tweet.id,
+                tweetText: tweet.text,
+                tweetUrl: tweet.permanentUrl,
+                tweetAuthorId: source.id,
+                tweetPhotos:
+                  tweet.photos?.map((photo: any) => ({
+                    id: photo.id,
+                    url: photo.url,
+                  })) ?? [],
+                tweetVideos:
+                  tweet.videos?.map((video: any) => ({
+                    id: video.id,
+                    url: tweet.url ?? "",
+                  })) ?? [],
+                tweetUrls: tweet.urls ?? [],
+                tweetImagesDescriptions,
+                tweetLinksDescriptions,
+                tweetCreatedAt: new Date(tweet.timeParsed),
+                lastTweetImagesProcessedAt: null,
+                lastTweetLinksProcessedAt: null,
+                isPushedToAutoRag: false,
+                createdAt: new Date(),
+              };
+            });
+            await db
+              .insert(insightSourceTweets)
+              .values(tweetRecords)
+              .onConflictDoNothing();
+            totalTweets += tweetRecords.length;
+          }
+          success = true;
+        } catch (error) {
+          // Only log fatal error for this source
+        }
+      }
+    })();
+    await Promise.race([
+      scrapePromise,
+      new Promise((resolve) =>
+        setTimeout(() => {
+          timedOut = true;
+          resolve(undefined);
+        }, 2 * 60 * 1000)
+      ),
+    ]);
+  }
 }
