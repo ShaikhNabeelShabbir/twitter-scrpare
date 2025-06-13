@@ -73,7 +73,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error("[ERROR] Fatal error in main execution:", error);
-  process.exit(1);
-});
+console.time("batch");
+main()
+  .catch((error) => {
+    console.error("[ERROR] Fatal error in main execution:", error);
+    process.exit(1);
+  })
+  .finally(() => {
+    console.timeEnd("batch");
+  });
